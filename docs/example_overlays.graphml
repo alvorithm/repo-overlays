@@ -1,0 +1,856 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:java="http://www.yworks.com/xml/yfiles-common/1.0/java" xmlns:sys="http://www.yworks.com/xml/yfiles-common/markup/primitives/2.0" xmlns:x="http://www.yworks.com/xml/yfiles-common/markup/2.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:y="http://www.yworks.com/xml/graphml" xmlns:yed="http://www.yworks.com/xml/yed/3" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://www.yworks.com/xml/schema/graphml/1.1/ygraphml.xsd">
+  <!--Created by yEd 3.25.1-->
+  <key attr.name="description" attr.type="string" for="graph" id="d0"/>
+  <key for="port" id="d1" yfiles.type="portgraphics"/>
+  <key for="port" id="d2" yfiles.type="portgeometry"/>
+  <key for="port" id="d3" yfiles.type="portuserdata"/>
+  <key attr.name="url" attr.type="string" for="node" id="d4"/>
+  <key attr.name="description" attr.type="string" for="node" id="d5"/>
+  <key for="node" id="d6" yfiles.type="nodegraphics"/>
+  <key for="graphml" id="d7" yfiles.type="resources"/>
+  <key attr.name="url" attr.type="string" for="edge" id="d8"/>
+  <key attr.name="description" attr.type="string" for="edge" id="d9"/>
+  <key for="edge" id="d10" yfiles.type="edgegraphics"/>
+  <graph edgedefault="directed" id="G">
+    <data key="d0" xml:space="preserve"/>
+    <node id="n0" yfiles.foldertype="group">
+      <data key="d4" xml:space="preserve"/>
+      <data key="d6">
+        <y:ProxyAutoBoundsNode>
+          <y:Realizers active="0">
+            <y:GroupNode>
+              <y:Geometry height="964.5350196177166" width="311.15200000000027" x="-26.46120806884754" y="-137.4222922261555"/>
+              <y:Fill color="#F2F2F2" transparent="false"/>
+              <y:BorderStyle color="#CCCCCC" type="line" width="1.0"/>
+              <y:NodeLabel alignment="center" autoSizePolicy="node_width" borderDistance="0.0" bottomInset="10" fontFamily="Fira Sans Condensed" fontSize="15" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="38.000125885009766" horizontalTextPosition="center" iconTextGap="4" leftInset="10" modelName="internal" modelPosition="t" rightInset="10" textColor="#000000" topInset="10" verticalTextPosition="bottom" visible="true" width="311.15200000000027" x="0.0" xml:space="preserve" y="0.0">Sharable repos</y:NodeLabel>
+              <y:Shape type="roundrectangle"/>
+              <y:State closed="false" closedHeight="50.0" closedWidth="50.0" innerGraphDisplayEnabled="false"/>
+              <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
+              <y:BorderInsets bottom="10" bottomF="9.975729166666724" left="12" leftF="12.092999999999975" right="12" rightF="12.05900000000031" top="0" topF="0.0"/>
+            </y:GroupNode>
+            <y:GroupNode>
+              <y:Geometry height="50.0" width="50.0" x="-25.945999999999984" y="-105.42229222615549"/>
+              <y:Fill color="#F5F5F5" transparent="false"/>
+              <y:BorderStyle color="#000000" type="dashed" width="1.0"/>
+              <y:NodeLabel alignment="right" autoSizePolicy="node_width" backgroundColor="#EBEBEB" borderDistance="0.0" fontFamily="Dialog" fontSize="15" fontStyle="plain" hasLineColor="false" height="21.4609375" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="65.201171875" x="-7.6005859375" xml:space="preserve" y="0.0">Folder 9</y:NodeLabel>
+              <y:Shape type="roundrectangle"/>
+              <y:State closed="true" closedHeight="50.0" closedWidth="50.0" innerGraphDisplayEnabled="false"/>
+              <y:Insets bottom="5" bottomF="5.0" left="5" leftF="5.0" right="5" rightF="5.0" top="5" topF="5.0"/>
+              <y:BorderInsets bottom="0" bottomF="0.0" left="0" leftF="0.0" right="0" rightF="0.0" top="0" topF="0.0"/>
+            </y:GroupNode>
+          </y:Realizers>
+        </y:ProxyAutoBoundsNode>
+      </data>
+      <graph edgedefault="directed" id="n0:">
+        <node id="n0::n0" yfiles.foldertype="group">
+          <data key="d6">
+            <y:ProxyAutoBoundsNode>
+              <y:Realizers active="0">
+                <y:GroupNode>
+                  <y:Geometry height="513.529352162679" width="257.0" x="0.6317919311524633" y="-84.42216634114573"/>
+                  <y:Fill color="#DFF3E0" transparent="false"/>
+                  <y:BorderStyle color="#33AA33" type="line" width="2.0"/>
+                  <y:NodeLabel alignment="right" autoSizePolicy="node_width" backgroundColor="#DFF3E0" borderDistance="0.0" bottomInset="10" fontFamily="Fira Sans Condensed" fontSize="14" fontStyle="bold" hasLineColor="false" height="36.7999267578125" horizontalTextPosition="center" iconTextGap="4" leftInset="10" modelName="internal" modelPosition="t" rightInset="10" textColor="#004400" topInset="10" verticalTextPosition="bottom" visible="true" width="257.0" x="0.0" xml:space="preserve" y="0.0"> beadpot-docs.wiki</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                  <y:State closed="false" closedHeight="80.0" closedWidth="100.0" innerGraphDisplayEnabled="true"/>
+                  <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
+                  <y:BorderInsets bottom="0" bottomF="0.0" left="13" leftF="13.499999999999972" right="8" rightF="7.500000000000028" top="0" topF="0.0"/>
+                </y:GroupNode>
+                <y:GroupNode>
+                  <y:Geometry height="80.0" width="100.0" x="-15.0" y="-15.0"/>
+                  <y:Fill color="#DFF3E0" transparent="false"/>
+                  <y:BorderStyle color="#33AA33" type="line" width="2.0"/>
+                  <y:NodeLabel alignment="left" autoSizePolicy="node_width" backgroundColor="#DFF3E0" borderDistance="0.0" fontFamily="Dialog" fontSize="14" fontStyle="bold" hasLineColor="false" height="20.296875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#004400" verticalTextPosition="bottom" visible="true" width="321.566162109375" x="-110.7830810546875" xml:space="preserve" y="0.0">&#127760; beadpot-docs.wiki  (Codeberg, public)</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                  <y:State closed="true" closedHeight="80.0" closedWidth="100.0" innerGraphDisplayEnabled="true"/>
+                  <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
+                  <y:BorderInsets bottom="0" bottomF="0.0" left="0" leftF="0.0" right="0" rightF="0.0" top="0" topF="0.0"/>
+                </y:GroupNode>
+              </y:Realizers>
+            </y:ProxyAutoBoundsNode>
+          </data>
+          <graph edgedefault="directed" id="n0::n0:">
+            <node id="n0::n0::n0">
+              <data key="d6">
+                <y:ShapeNode>
+                  <y:Geometry height="52.4140625" width="200.0" x="29.131791931152435" y="361.6931233215332"/>
+                  <y:Fill color="#FFFFFF" transparent="false"/>
+                  <y:BorderStyle hasColor="false" type="dashed" width="1.0"/>
+                  <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="17.199901580810547" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#333333" verticalTextPosition="bottom" visible="true" width="176.28065490722656" x="11.859672546386719" xml:space="preserve" y="17.607080459594727">_shared / beadpot-graph-schema. md</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                </y:ShapeNode>
+              </data>
+            </node>
+            <node id="n0::n0::n1">
+              <data key="d6">
+                <y:ShapeNode>
+                  <y:Geometry height="52.4140625" width="200.0" x="29.131791931152435" y="298.4088221232097"/>
+                  <y:Fill color="#FFFFFF" transparent="false"/>
+                  <y:BorderStyle hasColor="false" type="dashed" width="1.0"/>
+                  <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="17.199901580810547" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#333333" verticalTextPosition="bottom" visible="true" width="153.51080322265625" x="23.244598388671875" xml:space="preserve" y="17.607080459594727">_shared / beadpot-ingestion. md</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                </y:ShapeNode>
+              </data>
+            </node>
+            <node id="n0::n0::n2">
+              <data key="d6">
+                <y:ShapeNode>
+                  <y:Geometry height="48.921875" width="200.0" x="29.131791931152435" y="169.8428571573894"/>
+                  <y:Fill color="#F3F3F3" transparent="false"/>
+                  <y:BorderStyle hasColor="false" type="dashed" width="1.0"/>
+                  <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="10" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="15.999988555908203" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#666666" verticalTextPosition="bottom" visible="true" width="162.2297821044922" x="18.885108947753906" xml:space="preserve" y="16.4609432220459">README.md (entry point)</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                </y:ShapeNode>
+              </data>
+            </node>
+            <node id="n0::n0::n3">
+              <data key="d6">
+                <y:ShapeNode>
+                  <y:Geometry height="65.21875" width="200.0" x="35.131791931152435" y="-32.622239583333226"/>
+                  <y:Fill color="#F0F0FF" transparent="false"/>
+                  <y:BorderStyle color="#6666AA" type="dashed" width="1.0"/>
+                  <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="30.399803161621094" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#333355" verticalTextPosition="bottom" visible="true" width="118.61911010742188" x="40.69044494628906" xml:space="preserve" y="17.409473419189453">beadpot / dot_claude
+/ skills / test-feature. md</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                </y:ShapeNode>
+              </data>
+            </node>
+          </graph>
+        </node>
+        <node id="n0::n1" yfiles.foldertype="group">
+          <data key="d6">
+            <y:ProxyAutoBoundsNode>
+              <y:Realizers active="0">
+                <y:GroupNode>
+                  <y:Geometry height="348.7347021458944" width="257.0" x="0.6317919311524349" y="453.40229607899994"/>
+                  <y:Fill color="#DFF3E0" transparent="false"/>
+                  <y:BorderStyle color="#33AA33" type="line" width="2.0"/>
+                  <y:NodeLabel alignment="right" autoSizePolicy="node_width" backgroundColor="#DFF3E0" borderDistance="0.0" bottomInset="10" fontFamily="Fira Sans Condensed" fontSize="14" fontStyle="bold" hasLineColor="false" height="36.7999267578125" horizontalTextPosition="center" iconTextGap="4" leftInset="10" modelName="internal" modelPosition="t" rightInset="10" textColor="#004400" topInset="10" verticalTextPosition="bottom" visible="true" width="257.0" x="0.0" xml:space="preserve" y="0.0">penpot-docs.wiki</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                  <y:State closed="false" closedHeight="80.0" closedWidth="100.0" innerGraphDisplayEnabled="true"/>
+                  <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
+                  <y:BorderInsets bottom="9" bottomF="8.514791666666724" left="14" leftF="13.5" right="13" rightF="13.499999999999972" top="4" topF="4.2559212214151785"/>
+                </y:GroupNode>
+                <y:GroupNode>
+                  <y:Geometry height="80.0" width="100.0" x="-15.0" y="-15.0"/>
+                  <y:Fill color="#DFF3E0" transparent="false"/>
+                  <y:BorderStyle color="#33AA33" type="line" width="2.0"/>
+                  <y:NodeLabel alignment="left" autoSizePolicy="node_width" backgroundColor="#DFF3E0" borderDistance="0.0" fontFamily="Dialog" fontSize="14" fontStyle="bold" hasLineColor="false" height="20.296875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#004400" verticalTextPosition="bottom" visible="true" width="312.064208984375" x="-106.0321044921875" xml:space="preserve" y="0.0">&#127760; penpot-docs.wiki  (Codeberg, public)</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                  <y:State closed="true" closedHeight="80.0" closedWidth="100.0" innerGraphDisplayEnabled="true"/>
+                  <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
+                  <y:BorderInsets bottom="0" bottomF="0.0" left="0" leftF="0.0" right="0" rightF="0.0" top="0" topF="0.0"/>
+                </y:GroupNode>
+              </y:Realizers>
+            </y:ProxyAutoBoundsNode>
+          </data>
+          <graph edgedefault="directed" id="n0::n1:">
+            <node id="n0::n1::n0">
+              <data key="d6">
+                <y:ShapeNode>
+                  <y:Geometry height="52.4140625" width="200.0" x="29.131791931152435" y="509.4581440582276"/>
+                  <y:Fill color="#FFFFFF" transparent="false"/>
+                  <y:BorderStyle hasColor="false" type="dashed" width="1.0"/>
+                  <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="17.199901580810547" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#333333" verticalTextPosition="bottom" visible="true" width="159.01077270507812" x="20.494613647460938" xml:space="preserve" y="17.607080459594727">_shared / penpot- data-model.md</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                </y:ShapeNode>
+              </data>
+            </node>
+            <node id="n0::n1::n1">
+              <data key="d6">
+                <y:ShapeNode>
+                  <y:Geometry height="52.4140625" width="200.0" x="29.131791931152435" y="656.2862690582276"/>
+                  <y:Fill color="#FFFFFF" transparent="false"/>
+                  <y:BorderStyle hasColor="false" type="dashed" width="1.0"/>
+                  <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="17.199901580810547" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#333333" verticalTextPosition="bottom" visible="true" width="158.2407989501953" x="20.879600524902344" xml:space="preserve" y="17.607080459594727">_shared / penpot-plugin-arch. md</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                </y:ShapeNode>
+              </data>
+            </node>
+            <node id="n0::n1::n2">
+              <data key="d6">
+                <y:ShapeNode>
+                  <y:Geometry height="52.4140625" width="200.0" x="29.131791931152435" y="582.8722065582276"/>
+                  <y:Fill color="#FFFFFF" transparent="false"/>
+                  <y:BorderStyle hasColor="false" type="dashed" width="1.0"/>
+                  <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="17.199901580810547" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#333333" verticalTextPosition="bottom" visible="true" width="173.04666137695312" x="13.476669311523438" xml:space="preserve" y="17.607080459594727">_shared /  penpot- design-tokens.md</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                </y:ShapeNode>
+              </data>
+            </node>
+            <node id="n0::n1::n3">
+              <data key="d6">
+                <y:ShapeNode>
+                  <y:Geometry height="48.921875" width="200.0" x="29.131791931152435" y="729.7003315582276"/>
+                  <y:Fill color="#F3F3F3" transparent="false"/>
+                  <y:BorderStyle hasColor="false" type="dashed" width="1.0"/>
+                  <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="10" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="15.999988555908203" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#666666" verticalTextPosition="bottom" visible="true" width="162.2297821044922" x="18.885108947753906" xml:space="preserve" y="16.4609432220459">README.md (entry point)</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                </y:ShapeNode>
+              </data>
+            </node>
+          </graph>
+        </node>
+      </graph>
+    </node>
+    <node id="n1" yfiles.foldertype="group">
+      <data key="d6">
+        <y:ProxyAutoBoundsNode>
+          <y:Realizers active="0">
+            <y:GroupNode>
+              <y:Geometry height="357.02538954671195" width="180.0" x="1045.7149378967283" y="298.4088221232097"/>
+              <y:Fill color="#FDE2E2" transparent="false"/>
+              <y:BorderStyle color="#F2B3B3" type="line" width="2.0"/>
+              <y:NodeLabel alignment="right" autoSizePolicy="node_width" backgroundColor="#FDE2E2" borderDistance="0.0" bottomInset="10" fontFamily="Fira Sans Condensed" fontSize="14" fontStyle="bold" hasLineColor="false" height="36.7999267578125" horizontalTextPosition="center" iconTextGap="4" leftInset="10" modelName="internal" modelPosition="t" rightInset="10" textColor="#400000" topInset="10" verticalTextPosition="bottom" visible="true" width="180.0" x="0.0" xml:space="preserve" y="0.0">ai-overlay (lang partials)</y:NodeLabel>
+              <y:Shape type="roundrectangle"/>
+              <y:State closed="false" closedHeight="80.0" closedWidth="100.0" innerGraphDisplayEnabled="true"/>
+              <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
+              <y:BorderInsets bottom="3" bottomF="2.9304079793296296" left="0" leftF="0.0" right="0" rightF="0.0" top="4" topF="4.049941955566226"/>
+            </y:GroupNode>
+            <y:GroupNode>
+              <y:Geometry height="80.0" width="100.0" x="-15.0" y="-15.0"/>
+              <y:Fill color="#FDE2E2" transparent="false"/>
+              <y:BorderStyle color="#B33333" type="line" width="2.0"/>
+              <y:NodeLabel alignment="left" autoSizePolicy="node_width" backgroundColor="#FDE2E2" borderDistance="0.0" fontFamily="Dialog" fontSize="14" fontStyle="bold" hasLineColor="false" height="20.296875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#400000" verticalTextPosition="bottom" visible="true" width="295.470703125" x="-97.7353515625" xml:space="preserve" y="0.0">&#128213; ai-overlay (lang partials)  (private)</y:NodeLabel>
+              <y:Shape type="roundrectangle"/>
+              <y:State closed="true" closedHeight="80.0" closedWidth="100.0" innerGraphDisplayEnabled="true"/>
+              <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
+              <y:BorderInsets bottom="0" bottomF="0.0" left="0" leftF="0.0" right="0" rightF="0.0" top="0" topF="0.0"/>
+            </y:GroupNode>
+          </y:Realizers>
+        </y:ProxyAutoBoundsNode>
+      </data>
+      <graph edgedefault="directed" id="n1:">
+        <node id="n1::n0">
+          <data key="d6">
+            <y:ShapeNode>
+              <y:Geometry height="45.0" width="150.0" x="1060.7149378967283" y="592.503803690592"/>
+              <y:Fill color="#FFFFFF" transparent="false"/>
+              <y:BorderStyle hasColor="false" type="dashed" width="1.0"/>
+              <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="17.199901580810547" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#333333" verticalTextPosition="bottom" visible="true" width="98.43424987792969" x="25.782875061035156" xml:space="preserve" y="13.900049209594727">_shared / clojure.md</y:NodeLabel>
+              <y:Shape type="roundrectangle"/>
+            </y:ShapeNode>
+          </data>
+        </node>
+        <node id="n1::n1">
+          <data key="d6">
+            <y:ShapeNode>
+              <y:Geometry height="45.0" width="150.0" x="1060.7149378967283" y="476.68234535725924"/>
+              <y:Fill color="#FFFFFF" transparent="false"/>
+              <y:BorderStyle hasColor="false" type="dashed" width="1.0"/>
+              <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="17.199901580810547" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#333333" verticalTextPosition="bottom" visible="true" width="129.06900024414062" x="10.465499877929688" xml:space="preserve" y="13.900049209594727">_shared / clojurescript . md</y:NodeLabel>
+              <y:Shape type="roundrectangle"/>
+            </y:ShapeNode>
+          </data>
+        </node>
+        <node id="n1::n2">
+          <data key="d6">
+            <y:ShapeNode>
+              <y:Geometry height="45.0" width="150.0" x="1060.7149378967283" y="534.5930745239257"/>
+              <y:Fill color="#FFFFFF" transparent="false"/>
+              <y:BorderStyle hasColor="false" type="dashed" width="1.0"/>
+              <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="17.199901580810547" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#333333" verticalTextPosition="bottom" visible="true" width="87.06033325195312" x="31.469833374023438" xml:space="preserve" y="13.900049209594727">_shared / js-ts.md</y:NodeLabel>
+              <y:Shape type="roundrectangle"/>
+            </y:ShapeNode>
+          </data>
+        </node>
+        <node id="n1::n3">
+          <data key="d6">
+            <y:ShapeNode>
+              <y:Geometry height="45.0" width="150.0" x="1060.7149378967283" y="411.2586908365884"/>
+              <y:Fill color="#FFFFFF" transparent="false"/>
+              <y:BorderStyle hasColor="false" type="dashed" width="1.0"/>
+              <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="17.199901580810547" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#333333" verticalTextPosition="bottom" visible="true" width="98.97323608398438" x="25.513381958007812" xml:space="preserve" y="13.900049209594727">_shared / python.md</y:NodeLabel>
+              <y:Shape type="roundrectangle"/>
+            </y:ShapeNode>
+          </data>
+        </node>
+        <node id="n1::n4">
+          <data key="d6">
+            <y:ShapeNode>
+              <y:Geometry height="45.0" width="150.0" x="1060.7149378967283" y="354.2586908365884"/>
+              <y:Fill color="#FFFFFF" transparent="false"/>
+              <y:BorderStyle hasColor="false" type="dashed" width="1.0"/>
+              <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="17.199901580810547" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#333333" verticalTextPosition="bottom" visible="true" width="97.77426147460938" x="26.112869262695312" xml:space="preserve" y="13.900049209594727">_shared / cypher.md</y:NodeLabel>
+              <y:Shape type="roundrectangle"/>
+            </y:ShapeNode>
+          </data>
+        </node>
+      </graph>
+    </node>
+    <node id="n2" yfiles.foldertype="group">
+      <data key="d6">
+        <y:ProxyAutoBoundsNode>
+          <y:Realizers active="0">
+            <y:GroupNode>
+              <y:Geometry height="667.4622688954671" width="717.7099378967284" x="305.35951087951696" y="157.68952099609396"/>
+              <y:Fill color="#FDE2E2" transparent="false"/>
+              <y:BorderStyle color="#F2B3B3" type="line" width="2.0"/>
+              <y:NodeLabel alignment="right" autoSizePolicy="node_width" backgroundColor="#FDE2E2" borderDistance="0.0" bottomInset="10" fontFamily="Fira Sans Condensed" fontSize="14" fontStyle="bold" hasLineColor="false" height="36.7999267578125" horizontalTextPosition="center" iconTextGap="4" leftInset="10" modelName="internal" modelPosition="t" rightInset="10" textColor="#400000" topInset="10" verticalTextPosition="bottom" visible="true" width="717.7099378967284" x="0.0" xml:space="preserve" y="0.0">ai-overlay </y:NodeLabel>
+              <y:Shape type="roundrectangle"/>
+              <y:State closed="false" closedHeight="80.0" closedWidth="100.0" innerGraphDisplayEnabled="true"/>
+              <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
+              <y:BorderInsets bottom="4" bottomF="4.456978403727476" left="0" leftF="0.0" right="5" rightF="5.302375793457486" top="16" topF="15.93819272867836"/>
+            </y:GroupNode>
+            <y:GroupNode>
+              <y:Geometry height="80.0" width="100.0" x="-15.0" y="-15.0"/>
+              <y:Fill color="#FDE2E2" transparent="false"/>
+              <y:BorderStyle color="#B33333" type="line" width="2.0"/>
+              <y:NodeLabel alignment="left" autoSizePolicy="node_width" backgroundColor="#FDE2E2" borderDistance="0.0" fontFamily="Dialog" fontSize="14" fontStyle="bold" hasLineColor="false" height="20.296875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#400000" verticalTextPosition="bottom" visible="true" width="225.40234375" x="-62.701171875" xml:space="preserve" y="0.0">&#128213; ai-overlay  (private, local)</y:NodeLabel>
+              <y:Shape type="roundrectangle"/>
+              <y:State closed="true" closedHeight="80.0" closedWidth="100.0" innerGraphDisplayEnabled="true"/>
+              <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
+              <y:BorderInsets bottom="0" bottomF="0.0" left="0" leftF="0.0" right="0" rightF="0.0" top="0" topF="0.0"/>
+            </y:GroupNode>
+          </y:Realizers>
+        </y:ProxyAutoBoundsNode>
+      </data>
+      <graph edgedefault="directed" id="n2:">
+        <node id="n2::n0">
+          <data key="d6">
+            <y:ShapeNode>
+              <y:Geometry height="52.4140625" width="180.0" x="335.35951087951696" y="225.42764048258482"/>
+              <y:Fill color="#E3E7FF" transparent="false"/>
+              <y:BorderStyle color="#3333CC" type="line" width="1.0"/>
+              <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="12" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="18.400100708007812" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#111144" verticalTextPosition="bottom" visible="true" width="128.5968475341797" x="25.701576232910156" xml:space="preserve" y="17.006980895996094">_claude / CLAUDE.md.mo</y:NodeLabel>
+              <y:Shape type="rectangle"/>
+            </y:ShapeNode>
+          </data>
+        </node>
+        <node id="n2::n1">
+          <data key="d6">
+            <y:ShapeNode>
+              <y:Geometry height="52.4140625" width="180.0" x="807.7670729827879" y="530.8860432739257"/>
+              <y:Fill color="#E3E7FF" transparent="false"/>
+              <y:BorderStyle color="#3333CC" type="line" width="1.0"/>
+              <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="12" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="18.400100708007812" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#111144" verticalTextPosition="bottom" visible="true" width="125.6568603515625" x="27.17156982421875" xml:space="preserve" y="17.006980895996094">penpot / CLAUDE.md.mo</y:NodeLabel>
+              <y:Shape type="rectangle"/>
+            </y:ShapeNode>
+          </data>
+        </node>
+        <node id="n2::n2">
+          <data key="d6">
+            <y:ShapeNode>
+              <y:Geometry height="52.4140625" width="180.0" x="578.5111568450931" y="378.15684187825525"/>
+              <y:Fill color="#E3E7FF" transparent="false"/>
+              <y:BorderStyle color="#3333CC" type="line" width="1.0"/>
+              <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="12" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="18.400100708007812" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#111144" verticalTextPosition="bottom" visible="true" width="134.36891174316406" x="22.81554412841797" xml:space="preserve" y="17.006980895996094">beadpot / CLAUDE.md. mo</y:NodeLabel>
+              <y:Shape type="rectangle"/>
+            </y:ShapeNode>
+          </data>
+        </node>
+        <node id="n2::n3" yfiles.foldertype="group">
+          <data key="d4" xml:space="preserve"/>
+          <data key="d5"/>
+          <data key="d6">
+            <y:ProxyAutoBoundsNode>
+              <y:Realizers active="0">
+                <y:GroupNode>
+                  <y:Geometry height="106.96825548807772" width="682.407562103271" x="320.35951087951696" y="698.7265559997559"/>
+                  <y:Fill color="#FDE2E2" transparent="false"/>
+                  <y:BorderStyle color="#F2B3B3" type="dotted" width="1.0"/>
+                  <y:NodeLabel alignment="center" autoSizePolicy="node_width" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="15" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="22.000125885009766" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="bottom" visible="true" width="682.407562103271" x="0.0" xml:space="preserve" y="0.0">globals<y:LabelModel><y:SmartNodeLabelModel distance="0.0"/></y:LabelModel><y:ModelParameter><y:SmartNodeLabelModelParameter labelRatioX="-0.5" labelRatioY="-0.5" nodeRatioX="-0.5" nodeRatioY="-0.5" offsetX="0.0" offsetY="0.0" upX="0.0" upY="-1.0"/></y:ModelParameter></y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                  <y:State closed="false" closedHeight="50.0" closedWidth="50.0" innerGraphDisplayEnabled="false"/>
+                  <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
+                  <y:BorderInsets bottom="14" bottomF="14.033542429605973" left="0" leftF="0.0" right="0" rightF="0.0" top="16" topF="15.973775558471743"/>
+                </y:GroupNode>
+                <y:GroupNode>
+                  <y:Geometry height="50.0" width="50.0" x="788.2177122085814" y="-493.01468253968255"/>
+                  <y:Fill color="#F5F5F5" transparent="false"/>
+                  <y:BorderStyle color="#000000" type="dashed" width="1.0"/>
+                  <y:NodeLabel alignment="right" autoSizePolicy="node_width" backgroundColor="#EBEBEB" borderDistance="0.0" fontFamily="Dialog" fontSize="15" fontStyle="plain" hasLineColor="false" height="21.4609375" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="57.56201171875" x="-3.781005859375" xml:space="preserve" y="0.0">globals</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                  <y:State closed="true" closedHeight="50.0" closedWidth="50.0" innerGraphDisplayEnabled="false"/>
+                  <y:Insets bottom="5" bottomF="5.0" left="5" leftF="5.0" right="5" rightF="5.0" top="5" topF="5.0"/>
+                  <y:BorderInsets bottom="0" bottomF="0.0" left="0" leftF="0.0" right="0" rightF="0.0" top="0" topF="0.0"/>
+                </y:GroupNode>
+              </y:Realizers>
+            </y:ProxyAutoBoundsNode>
+          </data>
+          <graph edgedefault="directed" id="n2::n3:">
+            <node id="n2::n3::n0">
+              <data key="d6">
+                <y:ShapeNode>
+                  <y:Geometry height="45.0" width="180.0" x="807.7670729827879" y="731.6612690582276"/>
+                  <y:Fill color="#FFFFFF" transparent="false"/>
+                  <y:BorderStyle hasColor="false" type="dashed" width="1.0"/>
+                  <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="17.199901580810547" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#333333" verticalTextPosition="bottom" visible="true" width="90.83329772949219" x="44.583351135253906" xml:space="preserve" y="13.900049209594727">_shared / voice.md</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                </y:ShapeNode>
+              </data>
+            </node>
+            <node id="n2::n3::n1">
+              <data key="d6">
+                <y:ShapeNode>
+                  <y:Geometry height="45.0" width="180.0" x="578.5111568450931" y="731.6612690582276"/>
+                  <y:Fill color="#FFFFFF" transparent="false"/>
+                  <y:BorderStyle hasColor="false" type="dashed" width="1.0"/>
+                  <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="17.199901580810547" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#333333" verticalTextPosition="bottom" visible="true" width="148.923828125" x="15.5380859375" xml:space="preserve" y="13.900049209594727">_shared / editing-discipline. md</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                </y:ShapeNode>
+              </data>
+            </node>
+            <node id="n2::n3::n2">
+              <data key="d6">
+                <y:ShapeNode>
+                  <y:Geometry height="45.0" width="180.0" x="335.35951087951696" y="729.7003315582276"/>
+                  <y:Fill color="#FFFFFF" transparent="false"/>
+                  <y:BorderStyle hasColor="false" type="dashed" width="1.0"/>
+                  <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="17.199901580810547" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#333333" verticalTextPosition="bottom" visible="true" width="105.52919006347656" x="37.23540496826172" xml:space="preserve" y="13.900049209594727">_shared / security. md</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                </y:ShapeNode>
+              </data>
+            </node>
+          </graph>
+        </node>
+      </graph>
+    </node>
+    <node id="n3" yfiles.foldertype="group">
+      <data key="d4" xml:space="preserve"/>
+      <data key="d5"/>
+      <data key="d6">
+        <y:ProxyAutoBoundsNode>
+          <y:Realizers active="0">
+            <y:GroupNode>
+              <y:Geometry height="271.3845458679199" width="716.4307919311522" x="306.63865684509335" y="-137.4222922261555"/>
+              <y:Fill color="#F2F2F2" transparent="false"/>
+              <y:BorderStyle color="#CCCCCC" type="line" width="1.0"/>
+              <y:NodeLabel alignment="center" autoSizePolicy="node_width" borderDistance="0.0" bottomInset="10" fontFamily="Fira Sans Condensed" fontSize="15" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="38.000125885009766" horizontalTextPosition="center" iconTextGap="4" leftInset="10" modelName="internal" modelPosition="t" rightInset="10" textColor="#000000" topInset="10" verticalTextPosition="bottom" visible="true" width="716.4307919311522" x="0.0" xml:space="preserve" y="0.0">Targets</y:NodeLabel>
+              <y:Shape type="roundrectangle"/>
+              <y:State closed="false" closedHeight="50.0" closedWidth="50.0" innerGraphDisplayEnabled="false"/>
+              <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
+              <y:BorderInsets bottom="1" bottomF="1.3977432250976278" left="0" leftF="0.0" right="10" rightF="10.3023757934576" top="24" topF="23.602256774902344"/>
+            </y:GroupNode>
+            <y:GroupNode>
+              <y:Geometry height="50.0" width="50.0" x="0.0" y="60.0"/>
+              <y:Fill color="#F5F5F5" transparent="false"/>
+              <y:BorderStyle color="#000000" type="dashed" width="1.0"/>
+              <y:NodeLabel alignment="right" autoSizePolicy="node_width" backgroundColor="#EBEBEB" borderDistance="0.0" fontFamily="Dialog" fontSize="15" fontStyle="plain" hasLineColor="false" height="21.4609375" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="74.74462890625" x="-12.372314453125" xml:space="preserve" y="0.0">Folder 10</y:NodeLabel>
+              <y:Shape type="roundrectangle"/>
+              <y:State closed="true" closedHeight="50.0" closedWidth="50.0" innerGraphDisplayEnabled="false"/>
+              <y:Insets bottom="5" bottomF="5.0" left="5" leftF="5.0" right="5" rightF="5.0" top="5" topF="5.0"/>
+              <y:BorderInsets bottom="0" bottomF="0.0" left="0" leftF="0.0" right="0" rightF="0.0" top="0" topF="0.0"/>
+            </y:GroupNode>
+          </y:Realizers>
+        </y:ProxyAutoBoundsNode>
+      </data>
+      <graph edgedefault="directed" id="n3:">
+        <node id="n3::n0" yfiles.foldertype="group">
+          <data key="d6">
+            <y:ProxyAutoBoundsNode>
+              <y:Realizers active="0">
+                <y:GroupNode>
+                  <y:Geometry height="178.38441998291015" width="211.616583862305" x="559.3945729827881" y="-60.81990956624338"/>
+                  <y:Fill color="#FFF7D6" transparent="false"/>
+                  <y:BorderStyle color="#BB8800" type="line" width="2.0"/>
+                  <y:NodeLabel alignment="center" autoSizePolicy="node_width" backgroundColor="#FFF7D6" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="13" fontStyle="bold" hasLineColor="false" height="19.600013732910156" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#443300" verticalTextPosition="bottom" visible="true" width="211.616583862305" x="0.0" xml:space="preserve" y="0.0">~/Code/beadpot / (project)</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                  <y:State closed="false" closedHeight="80.0" closedWidth="100.0" innerGraphDisplayEnabled="true"/>
+                  <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
+                  <y:BorderInsets bottom="9" bottomF="8.93217185465494" left="7" leftF="6.616583862304992" right="0" rightF="0.0" top="0" topF="0.0"/>
+                </y:GroupNode>
+                <y:GroupNode>
+                  <y:Geometry height="80.0" width="100.0" x="-15.0" y="-15.0"/>
+                  <y:Fill color="#FFF7D6" transparent="false"/>
+                  <y:BorderStyle color="#BB8800" type="line" width="2.0"/>
+                  <y:NodeLabel alignment="left" autoSizePolicy="node_width" backgroundColor="#FFF7D6" borderDistance="0.0" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasLineColor="false" height="19.1328125" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#443300" verticalTextPosition="bottom" visible="true" width="285.19482421875" x="-92.597412109375" xml:space="preserve" y="0.0">&#127919; ~/Code/beadpot /   (project overlay)</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                  <y:State closed="true" closedHeight="80.0" closedWidth="100.0" innerGraphDisplayEnabled="true"/>
+                  <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
+                  <y:BorderInsets bottom="0" bottomF="0.0" left="0" leftF="0.0" right="0" rightF="0.0" top="0" topF="0.0"/>
+                </y:GroupNode>
+              </y:Realizers>
+            </y:ProxyAutoBoundsNode>
+          </data>
+          <graph edgedefault="directed" id="n3::n0:">
+            <node id="n3::n0::n0">
+              <data key="d6">
+                <y:ShapeNode>
+                  <y:Geometry height="45.0" width="175.0" x="581.0111568450931" y="48.63233856201183"/>
+                  <y:Fill color="#FFF1B8" transparent="false"/>
+                  <y:BorderStyle color="#BB8800" type="line" width="2.0"/>
+                  <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="12" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="18.400100708007812" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#443300" verticalTextPosition="bottom" visible="true" width="63.19639587402344" x="55.90180206298828" xml:space="preserve" y="13.299949645996087">CLAUDE. md</y:NodeLabel>
+                  <y:Shape type="rectangle"/>
+                </y:ShapeNode>
+              </data>
+            </node>
+            <node id="n3::n0::n1">
+              <data key="d6">
+                <y:ShapeNode>
+                  <y:Geometry height="52.4140625" width="175.0" x="581.0111568450931" y="-26.219895833333226"/>
+                  <y:Fill color="#FFF1B8" transparent="false"/>
+                  <y:BorderStyle color="#BB8800" type="dashed" width="2.0"/>
+                  <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="13" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="19.600013732910156" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#443300" verticalTextPosition="bottom" visible="true" width="165.55117797851562" x="4.7244110107421875" xml:space="preserve" y="16.407024383544922">.claude/skills/test-feature.md</y:NodeLabel>
+                  <y:Shape type="rectangle"/>
+                </y:ShapeNode>
+              </data>
+            </node>
+          </graph>
+        </node>
+        <node id="n3::n1" yfiles.foldertype="group">
+          <data key="d6">
+            <y:ProxyAutoBoundsNode>
+              <y:Realizers active="0">
+                <y:GroupNode>
+                  <y:Geometry height="103.5321855875651" width="200.0" x="797.7670729827879" y="14.032324829101675"/>
+                  <y:Fill color="#FFF7D6" transparent="false"/>
+                  <y:BorderStyle color="#BB8800" type="line" width="2.0"/>
+                  <y:NodeLabel alignment="center" autoSizePolicy="node_width" backgroundColor="#FFF7D6" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="13" fontStyle="bold" hasLineColor="false" height="19.600013732910156" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#443300" verticalTextPosition="bottom" visible="true" width="200.0" x="0.0" xml:space="preserve" y="0.0">~/Code/penpot/ (project)</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                  <y:State closed="false" closedHeight="80.0" closedWidth="100.0" innerGraphDisplayEnabled="true"/>
+                  <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
+                  <y:BorderInsets bottom="9" bottomF="8.93217185465494" left="10" leftF="10.0" right="10" rightF="10.0" top="0" topF="0.0"/>
+                </y:GroupNode>
+                <y:GroupNode>
+                  <y:Geometry height="80.0" width="100.0" x="-15.0" y="-15.0"/>
+                  <y:Fill color="#FFF7D6" transparent="false"/>
+                  <y:BorderStyle color="#BB8800" type="line" width="2.0"/>
+                  <y:NodeLabel alignment="left" autoSizePolicy="node_width" backgroundColor="#FFF7D6" borderDistance="0.0" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasLineColor="false" height="19.1328125" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#443300" verticalTextPosition="bottom" visible="true" width="276.37158203125" x="-88.185791015625" xml:space="preserve" y="0.0">&#127919; ~/Code/penpot /   (project overlay)</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                  <y:State closed="true" closedHeight="80.0" closedWidth="100.0" innerGraphDisplayEnabled="true"/>
+                  <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
+                  <y:BorderInsets bottom="0" bottomF="0.0" left="0" leftF="0.0" right="0" rightF="0.0" top="0" topF="0.0"/>
+                </y:GroupNode>
+              </y:Realizers>
+            </y:ProxyAutoBoundsNode>
+          </data>
+          <graph edgedefault="directed" id="n3::n1:">
+            <node id="n3::n1::n0">
+              <data key="d6">
+                <y:ShapeNode>
+                  <y:Geometry height="45.0" width="150.0" x="822.7670729827879" y="48.63233856201183"/>
+                  <y:Fill color="#FFF1B8" transparent="false"/>
+                  <y:BorderStyle color="#BB8800" type="line" width="2.0"/>
+                  <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="12" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="18.400100708007812" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#443300" verticalTextPosition="bottom" visible="true" width="63.19639587402344" x="43.40180206298828" xml:space="preserve" y="13.299949645996087">CLAUDE. md</y:NodeLabel>
+                  <y:Shape type="rectangle"/>
+                </y:ShapeNode>
+              </data>
+            </node>
+          </graph>
+        </node>
+        <node id="n3::n2" yfiles.foldertype="group">
+          <data key="d6">
+            <y:ProxyAutoBoundsNode>
+              <y:Realizers active="0">
+                <y:GroupNode>
+                  <y:Geometry height="103.5321855875651" width="210.9999999999999" x="321.63865684509335" y="14.032324829101675"/>
+                  <y:Fill color="#FFF7D6" transparent="false"/>
+                  <y:BorderStyle color="#BB8800" type="line" width="2.0"/>
+                  <y:NodeLabel alignment="center" autoSizePolicy="node_width" backgroundColor="#FFF7D6" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="13" fontStyle="bold" hasLineColor="false" height="19.600013732910156" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#443300" verticalTextPosition="bottom" visible="true" width="210.9999999999999" x="0.0" xml:space="preserve" y="0.0">~/. config/claude/  (fixed)</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                  <y:State closed="false" closedHeight="80.0" closedWidth="100.0" innerGraphDisplayEnabled="true"/>
+                  <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
+                  <y:BorderInsets bottom="3" bottomF="2.932171854654939" left="14" leftF="13.72085403442361" right="17" rightF="17.279145965576276" top="6" topF="6.0"/>
+                </y:GroupNode>
+                <y:GroupNode>
+                  <y:Geometry height="80.0" width="100.0" x="-15.0" y="-15.0"/>
+                  <y:Fill color="#FFF7D6" transparent="false"/>
+                  <y:BorderStyle color="#BB8800" type="line" width="2.0"/>
+                  <y:NodeLabel alignment="left" autoSizePolicy="node_width" backgroundColor="#FFF7D6" borderDistance="0.0" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasLineColor="false" height="19.1328125" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#443300" verticalTextPosition="bottom" visible="true" width="322.02392578125" x="-111.011962890625" xml:space="preserve" y="0.0">&#127919; ~/.config/claude /   (fixed target _claude)</y:NodeLabel>
+                  <y:Shape type="roundrectangle"/>
+                  <y:State closed="true" closedHeight="80.0" closedWidth="100.0" innerGraphDisplayEnabled="true"/>
+                  <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
+                  <y:BorderInsets bottom="0" bottomF="0.0" left="0" leftF="0.0" right="0" rightF="0.0" top="0" topF="0.0"/>
+                </y:GroupNode>
+              </y:Realizers>
+            </y:ProxyAutoBoundsNode>
+          </data>
+          <graph edgedefault="directed" id="n3::n2:">
+            <node id="n3::n2::n0">
+              <data key="d6">
+                <y:ShapeNode>
+                  <y:Geometry height="45.0" width="150.0" x="350.35951087951696" y="54.63233856201183"/>
+                  <y:Fill color="#FFF1B8" transparent="false"/>
+                  <y:BorderStyle color="#BB8800" type="line" width="2.0"/>
+                  <y:NodeLabel alignment="center" autoSizePolicy="content" borderDistance="0.0" fontFamily="Fira Sans Condensed" fontSize="12" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="18.400100708007812" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="c" textColor="#443300" verticalTextPosition="bottom" visible="true" width="63.19639587402344" x="43.40180206298828" xml:space="preserve" y="13.299949645996087">CLAUDE. md</y:NodeLabel>
+                  <y:Shape type="rectangle"/>
+                </y:ShapeNode>
+              </data>
+            </node>
+          </graph>
+        </node>
+      </graph>
+    </node>
+    <edge id="e0" source="n0::n0::n3" target="n3::n0::n1">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="100.0" sy="-9.580920918782553" tx="-87.5" ty="-9.580920918782553"/>
+          <y:LineStyle color="#6666AA" type="dashed" width="2.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:EdgeLabel alignment="center" distance="2.0" fontFamily="Fira Sans Condensed" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="17.199901580810547" horizontalTextPosition="center" iconTextGap="4" modelName="custom" preferredPlacement="center" ratio="0.5" textColor="#333355" verticalTextPosition="bottom" visible="true" width="38.66072082519531" x="153.60932381439227" xml:space="preserve" y="-27.19990179697662">symlink<y:LabelModel><y:SmartEdgeLabelModel autoRotationEnabled="false" defaultAngle="0.0" defaultDistance="10.0"/></y:LabelModel><y:ModelParameter><y:SmartEdgeLabelModelParameter angle="6.283185307179586" distance="10.0" distanceToCenter="false" position="left" ratio="0.5" segment="0"/></y:ModelParameter><y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="relative_to_edge_flow" angleRotationOnRightSide="co" distance="-1.0" placement="center" side="anywhere" sideReference="relative_to_edge_flow"/></y:EdgeLabel>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="e1" source="n2::n0" target="n3::n2::n0">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="0.0" sy="-26.20703125" tx="0.0" ty="22.5"/>
+          <y:LineStyle color="#3333CC" type="line" width="3.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:EdgeLabel alignment="center" anchorX="-1.9999861907955392" anchorY="-22.32007537664228" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Fira Sans Condensed" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="30.399803161621094" horizontalTextPosition="center" iconTextGap="4" modelName="custom" preferredPlacement="center" ratio="0.5" textColor="#111144" upX="-1.0" upY="-6.123233995736766E-17" verticalTextPosition="bottom" visible="true" width="44.43568420410156" x="-32.39978935241663" xml:space="preserve" y="-66.75575958074384">render +
+symlink<y:LabelModel><y:SmartEdgeLabelModel autoRotationEnabled="true" defaultAngle="0.0" defaultDistance="10.0"/></y:LabelModel><y:ModelParameter><y:SmartEdgeLabelModelParameter angle="6.283185307179586" distance="1.9999999999999716" distanceToCenter="false" position="left" ratio="0.24314576695580192" segment="-1"/></y:ModelParameter><y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" placement="center" side="anywhere" sideReference="relative_to_edge_flow"/></y:EdgeLabel>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="e2" source="n2::n1" target="n3::n1::n0">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="-32.25" sy="-26.20703125" tx="-32.25" ty="22.5"/>
+          <y:LineStyle color="#3333CC" type="line" width="3.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:EdgeLabel alignment="center" anchorX="19.199884719848455" anchorY="-181.6369577636719" distance="2.0" fontFamily="Fira Sans Condensed" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="17.199901580810547" horizontalTextPosition="center" iconTextGap="4" modelName="custom" preferredPlacement="anywhere" ratio="0.5" textColor="#111144" upX="-1.0" upY="-6.123233995736766E-17" verticalTextPosition="bottom" visible="true" width="73.92645263671875" x="1.9999831390379086" xml:space="preserve" y="-255.56341040039064">render+symlink<y:LabelModel><y:RotatedDiscreteEdgeLabelModel angle="0.0" autoRotationEnabled="true" candidateMask="63" distance="2.0" positionRelativeToSegment="false"/></y:LabelModel><y:ModelParameter><y:RotatedDiscreteEdgeLabelModelParameter position="head"/></y:ModelParameter><y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" frozen="true" placement="anywhere" side="anywhere" sideReference="relative_to_edge_flow"/></y:EdgeLabel>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="e3" source="n2::n2" target="n3::n0::n0">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="41.625" sy="-26.20703125" tx="41.625" ty="22.5"/>
+          <y:LineStyle color="#3333CC" type="line" width="3.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:EdgeLabel alignment="center" anchorX="-2.000012588500681" anchorY="-123.19399305053503" distance="2.0" fontFamily="Fira Sans Condensed" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="17.199901580810547" horizontalTextPosition="center" iconTextGap="4" modelName="custom" preferredPlacement="anywhere" ratio="0.5" textColor="#111144" upX="-1.0" upY="-6.123233995736766E-17" verticalTextPosition="bottom" visible="true" width="73.92645263671875" x="-19.199914169311228" xml:space="preserve" y="-197.12044568725378">render+symlink<y:LabelModel><y:SmartEdgeLabelModel autoRotationEnabled="true" defaultAngle="0.0" defaultDistance="10.0"/></y:LabelModel><y:ModelParameter><y:SmartEdgeLabelModelParameter angle="6.283185307179586" distance="2.0" distanceToCenter="false" position="left" ratio="0.5893812711450238" segment="-1"/></y:ModelParameter><y:PreferredPlacementDescriptor angle="1.5707963267948966" angleOffsetOnRightSide="0" angleReference="relative_to_edge_flow" angleRotationOnRightSide="co" distance="-1.0" placement="anywhere" side="anywhere" sideReference="relative_to_edge_flow"/></y:EdgeLabel>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="e4" source="n1::n0" target="n2::n1">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="-75.0" sy="0.0" tx="43.5" ty="26.20703125">
+            <y:Point x="941.2670729827879" y="615.003803690592"/>
+          </y:Path>
+          <y:LineStyle color="#888888" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="e5" source="n1::n1" target="n2::n1">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="-75.0" sy="0.0" tx="47.25" ty="-26.20703125">
+            <y:Point x="945.0170729827879" y="499.18234535725924"/>
+          </y:Path>
+          <y:LineStyle color="#888888" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="e6" source="n1::n2" target="n2::n1">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="-75.0" sy="0.0" tx="90.0" ty="0.0"/>
+          <y:LineStyle color="#888888" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="e7" source="n1::n3" target="n2::n2">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="-75.0" sy="-19.5" tx="90.0" ty="9.894817708333164"/>
+          <y:LineStyle color="#888888" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="e8" source="n1::n4" target="n2::n2">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="-75.0" sy="15.432100694444557" tx="90.0" ty="-12.173081597222279"/>
+          <y:LineStyle color="#888888" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="e9" source="n0::n0::n0" target="n2::n2">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="100.0" sy="0.9923643900553429" tx="-90.0" ty="-15.471354166666686"/>
+          <y:LineStyle color="#3AA33A" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="e10" source="n0::n0::n1" target="n2::n2">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="100.0" sy="0.0" tx="-44.125" ty="-26.20703125">
+            <y:Point x="624.3861568450931" y="324.6158533732097"/>
+          </y:Path>
+          <y:LineStyle color="#3AA33A" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="e11" source="n0::n1::n0" target="n2::n1">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="100.0" sy="2.2561383928571104" tx="-90.0" ty="-19.17176082284095"/>
+          <y:LineStyle color="#3AA33A" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="e12" source="n0::n1::n0" target="n2::n2">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="100.0" sy="-14.719308035714334" tx="-90.0" ty="0.0">
+            <y:Point x="295.02515140533484" y="520.9458672725133"/>
+            <y:Point x="295.02515140533484" y="404.36387312825525"/>
+          </y:Path>
+          <y:LineStyle color="#3AA33A" type="dashed" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:EdgeLabel alignment="center" distance="2.0" fontFamily="Fira Sans Condensed" fontSize="11" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="30.399803161621094" horizontalTextPosition="center" iconTextGap="4" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" rotationAngle="270.0" textColor="#004400" verticalTextPosition="bottom" visible="true" width="112.10716247558594" x="65.66830825805664" xml:space="preserve" y="-62.99944305419922">shared partial
+(consumed by 2 targets)<y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" frozen="true" placement="anywhere" side="anywhere" sideReference="relative_to_edge_flow"/></y:EdgeLabel>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="e13" source="n0::n1::n1" target="n2::n1">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="100.0" sy="0.0" tx="-90.0" ty="18.150291720581208">
+            <y:Point x="248.3817919311524" y="682.4933003082276"/>
+            <y:Point x="248.3817919311524" y="575.2433662445069"/>
+          </y:Path>
+          <y:LineStyle color="#3AA33A" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="e14" source="n0::n1::n2" target="n2::n1">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="0.0" sy="-26.20703125" tx="-90.0" ty="14.779132034301938">
+            <y:Point x="129.13179193115243" y="571.8722065582276"/>
+          </y:Path>
+          <y:LineStyle color="#3AA33A" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="n2::e0" source="n2::n3::n0" target="n2::n2">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="-90.0" sy="9.75" tx="90.0" ty="18.769626736111036">
+            <y:Point x="775.8251358795168" y="763.9112690582276"/>
+            <y:Point x="775.8251358795168" y="423.1334998643663"/>
+          </y:Path>
+          <y:LineStyle color="#888888" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="n2::e1" source="n2::n3::n0" target="n2::n1">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="-43.5" sy="-22.5" tx="-43.5" ty="26.20703125"/>
+          <y:LineStyle color="#888888" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="n2::e2" source="n2::n3::n0" target="n2::n0">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="-90.0" sy="-9.75" tx="90.0" ty="-11.603515625">
+            <y:Point x="790.4530939483642" y="744.4112690582276"/>
+            <y:Point x="790.4530939483642" y="240.03115610758482"/>
+          </y:Path>
+          <y:LineStyle color="#888888" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="n2::e3" source="n2::n3::n1" target="n2::n2">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="-43.5" sy="-22.5" tx="-43.5" ty="26.20703125"/>
+          <y:LineStyle color="#888888" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="n2::e4" source="n2::n3::n1" target="n2::n1">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="43.5" sy="-22.5" tx="-90.0" ty="-2.196314394269507">
+            <y:Point x="712.0111568450931" y="554.8967601296562"/>
+          </y:Path>
+          <y:LineStyle color="#888888" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="n2::e5" source="n2::n3::n1" target="n2::n0">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="-90.0" sy="0.0" tx="90.0" ty="11.603515625">
+            <y:Point x="558.9528649139406" y="754.1612690582276"/>
+            <y:Point x="558.9528649139406" y="263.2381873575848"/>
+          </y:Path>
+          <y:LineStyle color="#888888" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="n2::e6" source="n2::n3::n2" target="n2::n2">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="0.0" sy="-22.5" tx="-90.0" ty="15.471354166666686">
+            <y:Point x="425.35951087951696" y="419.83522729492194"/>
+          </y:Path>
+          <y:LineStyle color="#888888" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="n2::e7" source="n2::n3::n2" target="n2::n1">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="58.0" sy="-22.5" tx="-90.0" ty="21.521451406860365">
+            <y:Point x="483.35951087951696" y="578.614525930786"/>
+          </y:Path>
+          <y:LineStyle color="#888888" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="n2::e8" source="n2::n3::n2" target="n2::n0">
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="-58.0" sy="-22.5" tx="-58.0" ty="26.20703125"/>
+          <y:LineStyle color="#888888" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+  </graph>
+  <data key="d7">
+    <y:Resources/>
+  </data>
+</graphml>
