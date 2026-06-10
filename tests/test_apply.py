@@ -298,3 +298,167 @@ def test_apply_all_covers_fixed_and_project_destinations(tmp: Path) -> None:
 
     assert (fixed_dest / "CLAUDE.md").is_symlink()
     assert (project / "AGENTS.md").is_symlink()
+
+
+# ── remote slug vs basename fallback ────────────────────────────────────
+
+
+def test_project_key_falls_back_to_basename_when_slug_does_not_match(tmp: Path) -> None:
+    """When the git remote slug (owner_repo) differs from the overlay key,
+    apply_one falls back to the toplevel basename.
+
+    Feature: remote-slug vs basename resolution (USAGE.md §2).
+    """
+    src_dir = make_source(tmp, "personal")
+    projects = tmp / "projects"
+    projects.mkdir()
+    dest = projects / "myproject"
+    _git_init(dest)
+
+    # Give the repo a remote whose slug does NOT match the basename.
+    subprocess.run(
+        ["git", "-C", str(dest), "remote", "add", "origin",
+         "git@github.com:some-owner/myproject.git"],
+        check=True, capture_output=True,
+    )
+
+    # Overlay key is the basename "myproject", not the slug "some-owner_myproject".
+    overlay_dir = src_dir / "myproject"
+    overlay_dir.mkdir()
+    (overlay_dir / "AGENTS.md").write_text("project guidance")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+    ok = apply_one(dest, config)
+
+    assert ok, "apply_one should succeed with basename fallback"
+    assert (dest / "AGENTS.md").is_symlink()
+    assert (dest / "AGENTS.md").read_text() == "project guidance"
+
+
+def test_project_key_uses_remote_slug_when_it_matches(tmp: Path) -> None:
+    """When the overlay key matches the remote slug exactly, that key is used
+    (in preference over a potentially matching basename).
+
+    Feature: remote-slug takes priority over basename (USAGE.md §2).
+    """
+    src_dir = make_source(tmp, "personal")
+    projects = tmp / "projects"
+    projects.mkdir()
+    dest = projects / "myrepo"
+    _git_init(dest)
+
+    # Remote slug will be "someone_mylib".
+    subprocess.run(
+        ["git", "-C", str(dest), "remote", "add", "origin",
+         "git@github.com:someone/mylib.git"],
+        check=True, capture_output=True,
+    )
+
+    # Create overlay key matching the remote slug.
+    (src_dir / "someone_mylib").mkdir()
+    (src_dir / "someone_mylib" / "README.md").write_text("slug-match")
+
+    # Also create a key matching the basename (should NOT be used).
+    (src_dir / "myrepo").mkdir()
+    (src_dir / "myrepo" / "README.md").write_text("basename-match")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+    ok = apply_one(dest, config)
+
+    assert ok
+    # The source files from someone_mylib/ should win.
+    assert (dest / "README.md").is_symlink()
+    assert (dest / "README.md").read_text() == "slug-match"
+
+
+def test_apply_all_falls_back_to_basename(tmp: Path) -> None:
+    """apply_all discovers repos under watched_roots and falls back to basename
+    when the remote slug doesn't match any overlay key.
+    """
+    watched = tmp / "Code"
+    project = watched / "beadpot"
+    _git_init(project)
+    subprocess.run(
+        ["git", "-C", str(project), "remote", "add", "origin",
+         "git@github.com:penpot/beadpot.git"],
+        check=True, capture_output=True,
+    )
+
+    src_dir = make_source(
+        tmp,
+        "personal",
+        watched_roots=[str(watched)],
+    )
+    (src_dir / "beadpot").mkdir()
+    (src_dir / "beadpot" / "AGENTS.md").write_text("beadpot guidance")
+
+    cfg_file = make_top_config(
+        tmp,
+        [{"name": "personal", "path": str(src_dir), "private": True}],
+    )
+    from repo_overlays.config import load_config
+    config = load_config(cfg_file)
+
+    apply_all(config)
+
+    assert (project / "AGENTS.md").is_symlink()
+    assert (project / "AGENTS.md").read_text() == "beadpot guidance"
+
+
+# ── list subcommand ──────────────────────────────────────────────────────
+
+
+def test_list_outputs_home_relative_paths(tmp: Path, capsys: pytest.CaptureFixture) -> None:
+    """repo-overlay list prints every overlay-managed file as $HOME-relative path."""
+    fixed_dest = tmp / "config" / "myapp"
+    fixed_dest.mkdir(parents=True)
+
+    watched = tmp / "Code"
+    project = watched / "myproj"
+    _git_init(project)
+
+    src_dir = make_source(
+        tmp,
+        "personal",
+        targets={"_myapp": str(fixed_dest)},
+        watched_roots=[str(watched)],
+    )
+    (src_dir / "_myapp").mkdir()
+    (src_dir / "_myapp" / "CONFIG.md").write_text("app config")
+    (src_dir / "_myapp" / "dot_secret" / "key.md").parent.mkdir(parents=True)
+    (src_dir / "_myapp" / "dot_secret" / "key.md").write_text("secret")
+
+    (src_dir / "myproj").mkdir()
+    (src_dir / "myproj" / "AGENTS.md").write_text("project guidance")
+
+    cfg_file = make_top_config(
+        tmp,
+        [{"name": "personal", "path": str(src_dir), "private": True}],
+    )
+
+    from repo_overlays.config import load_config
+    from repo_overlays.apply import apply_all
+    config = load_config(cfg_file)
+    apply_all(config)
+
+    # Verify manifests were written and symlinks exist before testing list.
+    assert (fixed_dest / "CONFIG.md").is_symlink()
+    assert (project / "AGENTS.md").is_symlink()
+
+    from repo_overlays.cli import cmd_list
+    import argparse
+
+    ns = argparse.Namespace(config=str(cfg_file))
+    ret = cmd_list(ns)
+    assert ret == 0
+
+    out = capsys.readouterr().out
+    lines = [l.strip() for l in out.split("\n") if l.strip()]
+
+    # Spot-check known entries. Paths outside $HOME are printed absolute.
+    assert f"{fixed_dest}/CONFIG.md" in lines, f"missing CONFIG.md in {lines}"
+    assert f"{project}/AGENTS.md" in lines, f"missing AGENTS.md in {lines}"
+
+    # Fixed targets keep dot_ prefix verbatim (no dot_ rewrite).
+    assert f"{fixed_dest}/dot_secret/key.md" in lines,\
+        f"missing dot_secret/key.md in {lines}"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Iterator
@@ -11,6 +12,25 @@ from .manifest import LinkRecord, prune, read, write
 from .render import render_template
 from .resolve import iter_all_destinations, resolve_key_dest
 from .sources import SourceStack
+
+
+_HOME = Path.home()
+
+
+def _fmt_path(p: Path) -> str:
+    """Return ``p`` as a string, abbreviating ``$HOME`` as ``~``."""
+    s = str(p)
+    home_s = str(_HOME)
+    if s == home_s:
+        return "~"
+    if s.startswith(home_s + os.sep):
+        return "~" + s[len(home_s):]
+    return s
+
+
+def _contributing_sources(key: str, config: AppConfig) -> list[str]:
+    """Return sorted names of sources that have directory *key*."""
+    return [src.name for src in config.sources if (src.path / key).is_dir()]
 
 
 def _dot_rewrite(rel: Path) -> Path:
@@ -96,6 +116,28 @@ def _apply_key(
     return links
 
 
+def _already_applied(dest_root: Path, key: str) -> bool:
+    """Return True if the overlay for *key* is already materialised at *dest_root*.
+
+    Checks the manifest and verifies every recorded symlink still exists and
+    points to the expected target.  Used by *apply_one* to skip redundant
+    re-application when cd'ing into a subdirectory of an already-applied repo.
+    """
+    manifest = read(dest_root)
+    if not manifest.links:
+        return False
+    for lr in manifest.links:
+        if lr.key != key:
+            continue
+        link = dest_root / lr.path
+        if not link.is_symlink() or not link.exists():
+            return False
+        # Resolve both target and recorded target so we compare real paths.
+        if str(link.resolve()) != str(Path(lr.target).resolve()):
+            return False
+    return True
+
+
 def apply_one(path: Path, config: AppConfig) -> bool:
     """Resolve and apply overlay for a single destination path.
 
@@ -110,12 +152,21 @@ def apply_one(path: Path, config: AppConfig) -> bool:
 
     stack = SourceStack(config)
     # Check at least one source has this key.
-    has_key = any((src.path / key).is_dir() for src in config.sources)
-    if not has_key:
+    sources = _contributing_sources(key, config)
+    if not sources:
         return False
 
-    print(f"apply: {key} → {dest_root}")
-    links = _apply_key(key, dest_root, is_fixed, stack, config)
+    # Skip silently if the overlay is already in place (avoids noisy output
+    # when cd'ing into subdirectories of an already-applied repo).
+    if _already_applied(dest_root, key):
+        return True
+
+    print(f"Overlay {key} ({', '.join(sources)}) → {_fmt_path(dest_root)}")
+    try:
+        links = _apply_key(key, dest_root, is_fixed, stack, config)
+    except FileNotFoundError as e:
+        print(f"  error: {e}", file=sys.stderr)
+        return False
     current_paths = {lr.path for lr in links}
 
     # Merge with existing manifest, prune removed links.
@@ -134,11 +185,15 @@ def apply_all(config: AppConfig) -> None:
     """Apply every known destination."""
     for key, dest_root, is_fixed in iter_all_destinations(config):
         stack = SourceStack(config)
-        has_key = any((src.path / key).is_dir() for src in config.sources)
-        if not has_key:
+        sources = _contributing_sources(key, config)
+        if not sources:
             continue
-        print(f"apply: {key} → {dest_root}")
-        links = _apply_key(key, dest_root, is_fixed, stack, config)
+        print(f"Overlay {key} ({', '.join(sources)}) → {_fmt_path(dest_root)}")
+        try:
+            links = _apply_key(key, dest_root, is_fixed, stack, config)
+        except FileNotFoundError as e:
+            print(f"  error: {e}", file=sys.stderr)
+            continue
         current_paths = {lr.path for lr in links}
         existing = read(dest_root)
         merged = {lr.path: lr for lr in existing.links}

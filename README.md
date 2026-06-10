@@ -40,7 +40,7 @@ Benefits:
 |------|---------|
 | **source** | A directory (git repo) holding overlay files. You can stack several; they are consulted in declared order. |
 | **source stack** | The ordered list of sources. Later sources override earlier ones on per-file conflicts; the first source that has a partial wins for partial lookup. |
-| **overlay key** | A top-level directory in a source, matched to a destination. Keys starting with `_` are *fixed targets* (bound to an absolute path); others are *project overlays* (matched to a git repo by remote slug or basename). |
+| **overlay key** | A top-level directory in a source, matched to a destination. Keys starting with `_` are *fixed targets* (bound to an absolute path); others are *project overlays* (matched to a git repo by remote slug, falling back to directory basename if the slug doesn't match any source key). |
 | **partial** | A `_shared/<name>.md` file in any source. Included into templates with `{{>_shared/<name>.md}}`. |
 | **template** | A `*.mo` file. Rendered via Mustache (partials resolved across the whole source stack) into `_rendered/<key>/<path>`. |
 | **materialise** | The act of writing `_rendered/` output and placing a symlink at the destination. |
@@ -102,6 +102,13 @@ enter = 'repo-overlay apply "$PWD" || true'
 ```
 
 The `|| true` absorbs the exit 1 that occurs when the directory has no matching overlay key, preventing shell prompt disruption.
+
+On entry, you'll see a brief output line:
+```
+Overlay beadpot (personal, beadpot-docs) → ~/Code/beadpot
+```
+Re-entering an already-applied repo (or cd'ing into one of its subdirectories)
+is silent — the overlay is already in place once materialised.
 
 ### Optional: Emacs integration
 

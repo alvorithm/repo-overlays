@@ -22,7 +22,7 @@ same files) into project worktrees, without committing it upstream.
 - **Overlay source**: A directory (typically a Git repo) holding overlays identified by keys. You can have several souce repos; they are stacked in declared order.
 - **Overlay key**: A top-level directory in a source. Two kinds: 
     - *Fixed target*: Key starts with `_`. Bound to an absolute destination in the source's `config.toml`. Layout mirrors the destination 1:1.
-    - *Project overlay*: Key does not start with `_`. Bound to a worktree by git remote slug (`owner_repo`) or directory basename. Uses `dot_X` → `.X` rewrite at materialisation.
+    - *Project overlay*: Key does not start with `_`. Bound to a worktree by git remote slug (`owner_repo`), falling back to the directory basename if the slug doesn't match any source key. Uses `dot_X` → `.X` rewrite at materialisation.
 - **Partial**: `_shared/<name>.md` in any source. Referenced from templates as `{{>_shared/<name>.md}}`.
 - **Template**: Any file in a source ending in `.mo`. Rendered to `_rendered/<key>/<path>` (extension stripped). Non-`.mo` files are symlinked verbatim. 
 - **Live file**: The symlink at the destination that the agent reads/writes.
@@ -110,7 +110,7 @@ After any of these interventions, you materialise rendered overlay sources to th
 
 - a systemd user service (`repo-overlay.service`), whenever files change under any
   overlay source or watched root;
-- a `mise enter` hook when you `cd` into a watched project;
+- a `mise enter` hook when you `cd` into a watched project (the first entry prints a confirmation line; re-entering an already-applied repo or any of its subdirectories is silent);
 - an Emacs `find-file-hook` / `project-switch-hook` 
 
 See below for installation notes for systemd/mise/emacs.
@@ -208,8 +208,59 @@ repo-overlay apply [<path>]      # materialise; default = apply everything
 repo-overlay promote <key>       # reconcile drift interactively
 repo-overlay render <src> <dst>  # (internal) render one template
 repo-overlay watch [--once]      # inotify daemon; --once runs apply_all and exits
+repo-overlay list                # list every live symlink ($HOME-relative), one per line
 repo-overlay config              # print effective sources, targets, watched_roots
 repo-overlay status              # reports drifts / broken links / missing partials
+```
+
+On a successful apply you'll see output like:
+```
+Overlay beadpot (personal, beadpot-docs) → ~/Code/beadpot
+Overlay _claude (personal) → ~/.config/claude
+```
+
+* Source names in parentheses show which repos contribute to the key.
+* Paths abbreviate `$HOME` as `~` for readability.
+* Missing partials are reported but don't block other overlay keys.
+
+## Debugging
+
+### What files does repo-overlays manage?
+
+```sh
+repo-overlay list
+```
+
+Outputs one `$HOME`-relative path per line for every symlink that an overlay has
+placed.  Useful for feeding into `.chezmoiignore` so that dotfile management does
+not collide with overlay-managed files:
+
+```sh
+repo-overlay list >> ~/.local/share/chezmoi/.chezmoiignore
+```
+
+### Re-applying an overlay with visible output
+
+The systemd watcher keeps overlays up to date as source files change.  When
+you later `cd` into a watched repo the mise hook finds nothing to do and stays
+silent (see `_already_applied()`).  To force a re-apply and see the full
+message:
+
+```sh
+rm ~/Code/beadpot/.repo-overlays.toml
+cd ~/Code/beadpot
+```
+
+The next `cd` triggers the mise hook, which re-materialises the overlay
+and prints the status line.
+
+### Missing partials
+
+If a template references a `{{>_shared/…}}` that doesn't exist in any source,
+`apply` reports the error but continues with other overlay keys.  Check with:
+
+```sh
+repo-overlay status
 ```
 
 ## 6. Managing multiple overlay sources
@@ -312,8 +363,9 @@ git worktree add ~/Code/penpot-feature my-branch
 
 Add a worktree-specific overlay key named after the worktree directory (e.g.
 `penpot-feature`) in your private source, with a template that overrides specific
-sections. Because the resolver picks the key by git remote slug or basename, a worktree
-in a different directory gets its own key.
+sections. The resolver tries the git remote slug first, then the toplevel directory
+basename, so a worktree in a different directory gets its own key without slug
+ambiguity.
 
 ## 8. Overriding or supplementing target-repo bundled files
 A project like Penpot ships its own `AGENTS.md` (or `CLAUDE.md`) in the repository root.

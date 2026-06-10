@@ -16,11 +16,13 @@ src/repo_overlays/
 ├── sources.py    # SourceStack: iterate keys, merge per-key file lists (later src wins),
 │                 # resolve_partial() with @name/ addressing and privacy enforcement
 ├── resolve.py    # map a path → (key, dest_root, is_fixed) via fixed targets, then git
-│                 # remote slug, then basename; iter_all_destinations() for apply_all
+│                 # remote slug (falling back to basename if slug matches no source key);
+│                 # iter_all_destinations() for apply_all
 ├── render.py     # render *.mo by recursive {{>ref}} substitution with _PartialLoader;
 │                 # drift detection; writes _rendered/<source>/<key>/<rel>
 ├── apply.py      # walk stack for each key, call render or symlink verbatim, dot_rewrite
-│                 # for project overlays; prune manifest on re-apply
+│                 # for project overlays; skip silently (_already_applied) on re-entry;
+│                 # catch missing partials and continue; prune manifest on re-apply
 ├── manifest.py   # read/write/prune <dest_root>/.repo-overlays.toml (tomllib/tomli_w)
 ├── promote.py    # interactive reconciliation of .proposed / .divergent files
 └── watch.py      # inotify_simple loop with 200 ms debounce; calls apply_all on events
@@ -59,7 +61,13 @@ for each (key, dest_root, is_fixed):
 
 **Dot-rewrite** — `_dot_rewrite()` (apply.py) replaces `dot_` prefix on each path component with `.`. Applied only for project overlays (`is_fixed=False`). Fixed targets keep paths verbatim.
 
+**Slug-fallback** — `_resolve_project_key()` (resolve.py) tries the git remote slug first, then falls back to the toplevel basename if no source has the slug-named key. Lets overlay keys be named after the repo basename (e.g. `beadpot`) even when the remote URL is `owner/beadpot`.
+
+**Skip on re-entry** — `_already_applied()` (apply.py) checks the manifest before printing. If the destination already has a valid manifest with all symlinks in place, `apply_one` returns silently. Prevents noisy output on every `cd` into an already-applied repo.
+
 **Regular-file guard** — `_apply_key()` skips any destination path that is a regular (non-symlink) file with a warning. It will never silently overwrite a committed project file.
+
+**Missing partials** — `_apply_key()` catches `FileNotFoundError` from unresolved `{{>…}}` refs. The error is reported but the program continues to the next overlay key rather than aborting entirely.
 
 ## Development workflow
 

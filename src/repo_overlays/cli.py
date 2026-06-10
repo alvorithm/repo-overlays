@@ -59,6 +59,31 @@ def cmd_watch(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_list(args: argparse.Namespace) -> int:
+    """List every file tracked by an overlay, one per line, relative to $HOME.
+
+    Useful for chezmoi to know which files to .chezmoiignore because they
+    are managed by repo-overlays rather than dotfile management.
+    """
+    config = _load(args)
+    home = Path.home()
+    seen: set[str] = set()
+    for _key, dest_root, _is_fixed in iter_all_destinations(config):
+        manifest = read_manifest(dest_root)
+        for lr in manifest.links:
+            full = (dest_root / lr.path)
+            try:
+                rel = full.relative_to(home)
+                line = str(rel)
+            except ValueError:
+                # Path not under $HOME — print absolute
+                line = str(full)
+            if line not in seen:
+                seen.add(line)
+                print(line)
+    return 0
+
+
 def cmd_config(args: argparse.Namespace) -> int:
     config = _load(args)
     print(f"Config: {TOP_LEVEL_CONFIG.expanduser()}")
@@ -144,6 +169,9 @@ def _build_parser() -> argparse.ArgumentParser:
     wp = sub.add_parser("watch", help="Watch and auto-apply on changes")
     wp.add_argument("--once", action="store_true", help="Apply once then exit")
     wp.set_defaults(func=cmd_watch)
+
+    lp = sub.add_parser("list", help="List every live file tracked by overlays ($HOME-relative)")
+    lp.set_defaults(func=cmd_list)
 
     cp = sub.add_parser("config", help="Print effective configuration")
     cp.set_defaults(func=cmd_config)

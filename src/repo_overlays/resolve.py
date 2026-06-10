@@ -34,6 +34,36 @@ def _git_remote_slug(toplevel: Path) -> str | None:
     return url.replace("/", "_")
 
 
+def _collect_project_keys(config: AppConfig) -> set[str]:
+    """Return the set of non-fixed overlay key names across all sources."""
+    keys: set[str] = set()
+    for src in config.sources:
+        if not src.path.is_dir():
+            continue
+        for child in src.path.iterdir():
+            if child.is_dir() and not child.name.startswith("_"):
+                keys.add(child.name)
+    return keys
+
+
+def _resolve_project_key(toplevel: Path, config: AppConfig) -> str:
+    """Resolve a project overlay key for a git toplevel.
+
+    Tries the git remote slug first (owner_repo format), then falls back
+    to the toplevel directory basename.  Returns whichever matches an
+    overlay key in at least one source; prefers remote slug on tie.
+    """
+    project_keys = _collect_project_keys(config)
+    remote_key = _git_remote_slug(toplevel)
+    basename_key = toplevel.name
+    # Prefer remote slug, fall back to basename.
+    for key in (remote_key, basename_key):
+        if key and key in project_keys:
+            return key
+    # Neither matches — return whatever we have (caller may still use it).
+    return remote_key or basename_key
+
+
 def resolve_key_dest(
     path: Path,
     config: AppConfig,
@@ -68,7 +98,7 @@ def resolve_key_dest(
     toplevel = _git_toplevel(path)
     if toplevel is None:
         return None
-    key = _git_remote_slug(toplevel) or toplevel.name
+    key = _resolve_project_key(toplevel, config)
     return key, toplevel, False
 
 
@@ -97,5 +127,5 @@ def iter_all_destinations(config: AppConfig) -> Iterator[tuple[str, Path, bool]]
             if toplevel in seen_tops:
                 continue
             seen_tops.add(toplevel)
-            key = _git_remote_slug(toplevel) or toplevel.name
+            key = _resolve_project_key(toplevel, config)
             yield key, toplevel, False
