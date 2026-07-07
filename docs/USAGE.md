@@ -355,7 +355,22 @@ Removing a source from `config.toml` and running `apply` removes all symlinks th
 source owned (tracked via the per-destination applied-links manifest, §7).
 
 ## 7. Worktree-specific overlays
-For a worktree where you want different instructions than the main checkout:
+
+`git worktree` checkouts are discovered automatically: the tool finds both regular
+`.git` directories and linked-worktree `.git` files.
+
+### Key resolution
+
+The resolver tries the **git remote slug** first, then the **toplevel directory
+basename**. This gives three scenarios:
+
+| Scenario | Slug matches a key? | Basename matches a key? | Result |
+|---|---|---|---|
+| Main checkout | `penpot_beadpot` → no | `beadpot` → yes | Uses `beadpot` key |
+| Worktree with custom key | `penpot_penpot` → no | `penpot-feature` → yes | Uses `penpot-feature` key |
+| Worktree, no matching key | `penpot_beadpot` → no | `scoping` → no | No overlay materialised |
+
+### Creating a worktree-specific overlay
 
 ```sh
 git worktree add ~/Code/penpot-feature my-branch
@@ -363,9 +378,14 @@ git worktree add ~/Code/penpot-feature my-branch
 
 Add a worktree-specific overlay key named after the worktree directory (e.g.
 `penpot-feature`) in your private source, with a template that overrides specific
-sections. The resolver tries the git remote slug first, then the toplevel directory
-basename, so a worktree in a different directory gets its own key without slug
-ambiguity.
+sections. The basename fallback picks it up.
+
+### Worktrees without their own overlay
+
+When no key matches, the worktree gets no materialised symlinks. Read docs from the
+main checkout's already-materialised locations, and edit at the overlay source.
+Per-feature folders inside a shared overlay key (e.g. `work/wf-now/feature-scoping/`)
+cover branch-specific docs without per-worktree overlays.
 
 ## 8. Overriding or supplementing target-repo bundled files
 A project like Penpot ships its own `AGENTS.md` (or `CLAUDE.md`) in the repository root.
