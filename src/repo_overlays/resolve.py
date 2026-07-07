@@ -105,7 +105,8 @@ def resolve_key_dest(
 def iter_all_destinations(config: AppConfig) -> Iterator[tuple[str, Path, bool]]:
     """Yield ``(key, dest_root, is_fixed)`` for every known destination.
 
-    Covers fixed targets + every git repo under watched_roots (depth ≤ 4).
+    Covers fixed targets + every git repo under watched_roots (depth ≤ 4),
+    including linked worktrees (where ``.git`` is a file).
     """
     targets = config.unified_targets
     for key, tpath in targets.items():
@@ -121,9 +122,15 @@ def iter_all_destinations(config: AppConfig) -> Iterator[tuple[str, Path, bool]]
             rel = git_dir.relative_to(root)
             if len(rel.parts) > 5:
                 continue
-            if not git_dir.is_dir():
+            if git_dir.is_dir():
+                toplevel = git_dir.parent
+            elif git_dir.is_file():
+                # Linked worktree: .git is a file containing "gitdir: <path>".
+                toplevel = _git_toplevel(git_dir.parent)
+                if toplevel is None:
+                    continue
+            else:
                 continue
-            toplevel = git_dir.parent
             if toplevel in seen_tops:
                 continue
             seen_tops.add(toplevel)
