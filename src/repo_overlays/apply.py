@@ -16,6 +16,9 @@ from .sources import SourceStack
 
 _HOME = Path.home()
 
+_MARKER_START = "# ── repo-overlays (auto-managed, do not edit between markers) ──"
+_MARKER_END = "# ── end repo-overlays ──"
+
 
 def _fmt_path(p: Path) -> str:
     """Return ``p`` as a string, abbreviating ``$HOME`` as ``~``."""
@@ -43,6 +46,58 @@ def _dot_rewrite(rel: Path) -> Path:
 
 def _rendered_dir(source: SourceConfig, key: str) -> Path:
     return source.path / "_rendered" / key
+
+
+def _git_info_exclude(dest_root: Path) -> Path | None:
+    """Return the path to ``.git/info/exclude`` for *dest_root*, or None.
+
+    Handles linked worktrees (where ``.git`` is a file containing
+    ``gitdir: …``) transparently.
+    """
+    git_path = dest_root / ".git"
+    if git_path.is_file():
+        content = git_path.read_text().strip()
+        if content.startswith("gitdir: "):
+            worktree_gitdir = Path(content[8:].strip())
+            return worktree_gitdir / "info" / "exclude"
+        return None
+    if git_path.is_dir():
+        return git_path / "info" / "exclude"
+    return None
+
+
+def _update_git_exclude(dest_root: Path, link_paths: list[str]) -> None:
+    """Add overlay link paths to ``.git/info/exclude``, idempotently.
+
+    Writes a marked section so repeated calls replace the block rather than
+    duplicating entries.  No-op when *dest_root* is not inside a git repo.
+    """
+    exclude_file = _git_info_exclude(dest_root)
+    if exclude_file is None:
+        return
+
+    exclude_file.parent.mkdir(parents=True, exist_ok=True)
+
+    existing = exclude_file.read_text() if exclude_file.exists() else ""
+
+    lines = [_MARKER_START]
+    for p in sorted(link_paths):
+        lines.append(f"/{p}")
+    lines.append(_MARKER_END)
+    new_section = "\n".join(lines) + "\n"
+
+    if _MARKER_START in existing:
+        start = existing.index(_MARKER_START)
+        end = existing.index(_MARKER_END) + len(_MARKER_END)
+        while end < len(existing) and existing[end] == "\n":
+            end += 1
+        updated = existing[:start] + new_section + existing[end:]
+    else:
+        if existing and not existing.endswith("\n"):
+            existing += "\n"
+        updated = existing + new_section
+
+    exclude_file.write_text(updated)
 
 
 def _apply_key(
@@ -178,6 +233,7 @@ def apply_one(path: Path, config: AppConfig) -> bool:
     if pruned:
         print(f"  pruned: {pruned}")
     write(dest_root, list(merged.values()))
+    _update_git_exclude(dest_root, list(current_paths))
     return True
 
 
@@ -203,3 +259,4 @@ def apply_all(config: AppConfig) -> None:
         if pruned:
             print(f"  pruned: {pruned}")
         write(dest_root, list(merged.values()))
+        _update_git_exclude(dest_root, list(current_paths))

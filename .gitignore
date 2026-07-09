@@ -7,3 +7,5 @@ dist/
 *.pyc
 
 .claude/settings.local.json
+
+graphify-out/

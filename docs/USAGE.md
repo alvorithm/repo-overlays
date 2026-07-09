@@ -450,6 +450,8 @@ Agents treat later instructions as higher-priority when there is ambiguity.
 
 ## 9. Destination hygiene
 
+### 9.1 Manifest file
+
 For every materialised destination, repo-overlays writes a manifest:
 
 ```
@@ -458,5 +460,46 @@ For every materialised destination, repo-overlays writes a manifest:
 
 It records which links were installed and which source owns them, so
 `apply` can prune stale links cleanly and `status` can detect external
-tampering. Add this file (and the live overlay paths) to the
-destination's `.gitignore`.
+tampering.
+
+The manifest is per-machine (it records absolute paths to your overlay
+sources) and must never be committed.  Add it to your **global git
+exclude** so every repo is covered:
+
+```sh
+# ~/.config/git/gitignore-global  (or wherever core.excludesFile points)
+.repo-overlays.toml
+```
+
+### 9.2 Live overlay paths
+
+`apply` automatically writes every overlay symlink it installs into the
+target repo's ``.git/info/exclude``, inside a marked section:
+
+```
+# ── repo-overlays (auto-managed, do not edit between markers) ──
+/AGENTS.md
+/CLAUDE.md
+/.claude/settings.json
+# ── end repo-overlays ──
+```
+
+This is:
+
+- **Idempotent**: repeated `apply` runs replace the block, never duplicate entries.
+- **Per-repo**: each destination's ``.git/info/exclude`` only lists its own paths.
+- **Non-invasive**: ``.git/info/exclude`` is local to the clone, never committed.
+
+No manual `.gitignore` edits are needed for overlay-managed files.
+
+### 9.3 Setting up a new overlayed repo
+
+1. Add the overlay key directory in your overlay source (e.g.
+   `~/Code/my-overlay/new-repo/CLAUDE.md`).
+2. Ensure the repo is under a `watched_roots` path in your source's
+   `config.toml`.
+3. Run `repo-overlay apply`.  The manifest, symlinks, and
+   `.git/info/exclude` entries are all created automatically.
+
+If the repo is not a git repository (e.g. `~/Ask`), the exclude step is
+skipped — there is no `.git` to exclude from.
