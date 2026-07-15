@@ -40,7 +40,7 @@ Benefits:
 |------|---------|
 | **source** | A directory (git repo) holding overlay files. You can stack several; they are consulted in declared order. |
 | **source stack** | The ordered list of sources. Later sources override earlier ones on per-file conflicts; the first source that has a partial wins for partial lookup. |
-| **overlay key** | A top-level directory in a source, matched to a destination. Keys starting with `_` are *fixed targets* (bound to an absolute path); others are *project overlays* (matched to a git repo by remote slug, falling back to directory basename if the slug doesn't match any source key). |
+| **overlay key** | A top-level directory in a source, matched to a destination. Keys starting with `_` are *fixed targets* (bound to an absolute path); others are *project overlays* matched to a git repo by, in order: remote slug (`owner_repo`), directory basename, then bare remote repo name (`repo`). The last step lets linked worktrees match by repo identity regardless of their directory name — see [Worktrees](#worktrees). |
 | **partial** | A `_shared/<name>.md` file in any source. Included into templates with `{{>_shared/<name>.md}}`. |
 | **template** | A `*.mo` file. Rendered via Mustache (partials resolved across the whole source stack) into `_rendered/<key>/<path>`. |
 | **materialise** | The act of writing `_rendered/` output and placing a symlink at the destination. |
@@ -48,6 +48,27 @@ Benefits:
 | **drift** | A live file whose content no longer matches a fresh render of its template — i.e. an agent has edited it since the last apply. |
 | **reconcile** | The interactive step (`repo-overlay promote`) that resolves drift: diff, accept the new render, keep the agent's edit, or edit the source. |
 | **watched_roots** | Parent directories whose git-repo children are auto-discovered as destinations and re-applied when any source changes. |
+
+## Worktrees
+
+A linked git worktree shares its `origin` with the main checkout, so overlays
+resolve by the repo's **bare remote repo name** — not the worktree's directory
+name. You can therefore name and place worktrees freely; all of these resolve to
+the `penpot` overlay key:
+
+```
+~/Code/worktrees/penpot-feature-x       → key `penpot` (via origin)
+~/Code/worktrees/penpot-bugfix-123      → key `penpot`
+~/Code/penpot/.claude/worktrees/foo     → key `penpot` (a Claude Code worktree)
+```
+
+Recommended convention: a flat `~/Code/worktrees/<repo>-<branch>` — top-level,
+grouped, and an immediate child of the `~/Code` watched_root. Overlays apply on
+`cd` / file-open via the hooks at any depth; the file-watcher's auto-reapply on
+*source* changes covers worktrees within 5 path components of a watched_root
+(so keep them shallow — flat under `~/Code/worktrees` is fine). A separate
+top-level tree like `~/Worktrees` works equally well; just add it to
+`watched_roots` since it is not under an existing one.
 
 ## Installation
 

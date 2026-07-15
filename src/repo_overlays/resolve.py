@@ -19,19 +19,24 @@ def _git_toplevel(path: Path) -> Path | None:
     return Path(result.stdout.strip()) if result.returncode == 0 else None
 
 
-def _git_remote_slug(toplevel: Path) -> str | None:
+def _git_remote_candidates(toplevel: Path) -> tuple[str | None, str | None]:
+    """Return ``(owner_repo slug, bare repo name)`` from origin, or (None, None).
+
+    A linked worktree shares its origin with the main checkout, so this
+    resolves the repo identity regardless of the worktree's directory name.
+    """
     result = subprocess.run(
         ["git", "-C", str(toplevel), "remote", "get-url", "origin"],
         capture_output=True,
         text=True,
     )
     if result.returncode != 0 or not result.stdout.strip():
-        return None
+        return None, None
     url = result.stdout.strip()
-    # git@host:owner/repo.git  or  https://host/owner/repo.git
+    # git@host:owner/repo.git  or  https://host/owner/repo.git  ->  owner/repo
     url = re.sub(r"^(git@|https?://)([^:/]+)[:/]", "", url)
-    url = re.sub(r"\.git$", "", url)
-    return url.replace("/", "_")
+    path = re.sub(r"\.git$", "", url)
+    return path.replace("/", "_"), path.rsplit("/", 1)[-1]
 
 
 def _collect_project_keys(config: AppConfig) -> set[str]:
@@ -49,19 +54,25 @@ def _collect_project_keys(config: AppConfig) -> set[str]:
 def _resolve_project_key(toplevel: Path, config: AppConfig) -> str:
     """Resolve a project overlay key for a git toplevel.
 
-    Tries the git remote slug first (owner_repo format), then falls back
-    to the toplevel directory basename.  Returns whichever matches an
-    overlay key in at least one source; prefers remote slug on tie.
+    Match order against the overlay keys present in some source:
+      1. git remote slug (``owner_repo``),
+      2. toplevel directory basename,
+      3. bare git remote repo name (``repo``).
+
+    (3) makes linked worktrees resolve correctly even when their directory is
+    not named after the repo — e.g. ``~/Code/worktrees/penpot-feature`` or
+    ``<repo>/.claude/worktrees/<name>``. A worktree shares origin with its main
+    checkout, so the bare repo name still matches the ``repo`` overlay key.
+    Returns the first candidate that matches; falls back to the slug (else
+    basename) when none match.
     """
     project_keys = _collect_project_keys(config)
-    remote_key = _git_remote_slug(toplevel)
+    remote_slug, remote_repo = _git_remote_candidates(toplevel)
     basename_key = toplevel.name
-    # Prefer remote slug, fall back to basename.
-    for key in (remote_key, basename_key):
+    for key in (remote_slug, basename_key, remote_repo):
         if key and key in project_keys:
             return key
-    # Neither matches — return whatever we have (caller may still use it).
-    return remote_key or basename_key
+    return remote_slug or basename_key
 
 
 def resolve_key_dest(

@@ -371,6 +371,36 @@ def test_project_key_uses_remote_slug_when_it_matches(tmp: Path) -> None:
     assert (dest / "README.md").read_text() == "slug-match"
 
 
+def test_project_key_matches_remote_repo_name_regardless_of_dir(tmp: Path) -> None:
+    """A linked worktree/clone whose directory is NOT named after the repo still
+    resolves to the bare-repo-name overlay key via the remote (owner/repo -> repo).
+
+    Feature: worktree-friendly key resolution (USAGE.md §2).
+    """
+    src_dir = make_source(tmp, "personal")
+    worktrees = tmp / "worktrees"
+    worktrees.mkdir()
+    dest = worktrees / "penpot-feature-x"  # dir name != repo name
+    _git_init(dest)
+    subprocess.run(
+        ["git", "-C", str(dest), "remote", "add", "origin",
+         "git@github.com:penpot/penpot.git"],
+        check=True, capture_output=True,
+    )
+
+    # Overlay key is the bare repo name "penpot" (not the slug, not the dir name).
+    overlay_dir = src_dir / "penpot"
+    overlay_dir.mkdir()
+    (overlay_dir / "CLAUDE.md").write_text("penpot guidance")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+    ok = apply_one(dest, config)
+
+    assert ok, "apply_one should resolve via the remote repo name"
+    assert (dest / "CLAUDE.md").is_symlink()
+    assert (dest / "CLAUDE.md").read_text() == "penpot guidance"
+
+
 def test_apply_all_falls_back_to_basename(tmp: Path) -> None:
     """apply_all discovers repos under watched_roots and falls back to basename
     when the remote slug doesn't match any overlay key.
