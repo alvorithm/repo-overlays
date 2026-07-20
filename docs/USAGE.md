@@ -264,6 +264,16 @@ If a template references a `{{>_shared/…}}` that doesn't exist in any source,
 repo-overlay status
 ```
 
+### After changing repo-overlay code
+
+A one-shot `repo-overlay apply` (or any manual CLI invocation) always runs the
+current code. The long-lived watcher does not: after updating repo-overlay
+itself, restart the daemon so it picks up the new code:
+
+```sh
+systemctl --user restart repo-overlay.service
+```
+
 ## 6. Managing multiple overlay sources
 
 A target repo may receive overlays with different audiences and lifecycles:
@@ -504,3 +514,26 @@ No manual `.gitignore` edits are needed for overlay-managed files.
 
 If the repo is not a git repository (e.g. `~/Ask`), the exclude step is
 skipped — there is no `.git` to exclude from.
+
+### 9.4 Harness state that must never be versioned
+
+Agent-harness runtime state, telemetry, session logs, and credential stores
+live outside the overlay system, but they share the same rule as the manifest:
+exclude them **globally**, never rely on a per-repo `.gitignore` (which is
+fragile and drifts between repos). Keep these unversioned and out of dotfile
+management:
+
+```
+~/.claude.json            # runtime config / MCP state
+~/.claude/projects/       # session state
+~/.claude/todos/          # session state
+~/.claude/history.json    # session history
+~/.claude/statsig/        # telemetry
+~/.codex/auth.json        # credential store
+~/.codex/threads/         # session state
+~/.codex/history.json     # session history
+```
+
+A global git exclude (§9.1) plus the auto-managed per-repo `.git/info/exclude`
+(§9.2) covers overlay artifacts consistently; extend the global exclude with the
+paths above so harness state is never accidentally committed.
