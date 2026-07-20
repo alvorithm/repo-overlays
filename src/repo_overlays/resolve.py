@@ -46,7 +46,7 @@ def _collect_project_keys(config: AppConfig) -> set[str]:
         if not src.path.is_dir():
             continue
         for child in src.path.iterdir():
-            if child.is_dir() and not child.name.startswith("_"):
+            if child.is_dir() and not child.name.startswith("_") and child.name not in src.ignore_keys:
                 keys.add(child.name)
     return keys
 

@@ -32,6 +32,8 @@ class SourceStack:
                 key = child.name
                 if key.startswith(("_rendered", ".git", "__pycache__")):
                     continue
+                if key in src.ignore_keys:
+                    continue
                 if key not in seen:
                     seen.add(key)
                     yield key
@@ -45,6 +47,8 @@ class SourceStack:
         # Build map: rel_path → (abs_path, source); later sources win.
         merged: dict[Path, tuple[Path, SourceConfig]] = {}
         for src in self._config.sources:
+            if key in src.ignore_keys:
+                continue
             key_dir = src.path / key
             if not key_dir.is_dir():
                 continue

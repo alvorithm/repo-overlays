@@ -18,6 +18,7 @@ class SourceConfig:
     remote: str | None = None
     watched_roots: list[Path] = field(default_factory=list)
     targets: dict[str, Path] = field(default_factory=dict)
+    ignore_keys: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -54,16 +55,34 @@ def _expand(raw: str) -> Path:
     return Path(raw).expanduser().resolve()
 
 
-def _load_source_config(source_path: Path) -> tuple[list[Path], dict[str, Path]]:
-    """Read watched_roots and [targets] from a per-source config.toml."""
+def _load_ignore_keys(source_path: Path, data: dict) -> frozenset[str]:
+    """Top-level dirs that are NOT overlay keys for this source.
+
+    Union of `ignore_keys` in the per-source config.toml and the lines of an
+    `.overlay-ignore` file at the source root (one key per line, `#` comments).
+    Lets a source repo carry non-overlay content (docs, staging dirs) without
+    the directory name accidentally matching a repo under a watched root.
+    """
+    keys = set(data.get("ignore_keys", []))
+    ignore_file = source_path / ".overlay-ignore"
+    if ignore_file.exists():
+        for line in ignore_file.read_text().splitlines():
+            entry = line.split("#", 1)[0].strip()
+            if entry:
+                keys.add(entry.rstrip("/"))
+    return frozenset(keys)
+
+
+def _load_source_config(source_path: Path) -> tuple[list[Path], dict[str, Path], frozenset[str]]:
+    """Read watched_roots, [targets] and ignore_keys from per-source config."""
     cfg_file = source_path / "config.toml"
-    if not cfg_file.exists():
-        return [], {}
-    with cfg_file.open("rb") as f:
-        data = tomllib.load(f)
+    data: dict = {}
+    if cfg_file.exists():
+        with cfg_file.open("rb") as f:
+            data = tomllib.load(f)
     watched_roots = [_expand(r) for r in data.get("watched_roots", [])]
     targets = {k: _expand(v) for k, v in data.get("targets", {}).items()}
-    return watched_roots, targets
+    return watched_roots, targets, _load_ignore_keys(source_path, data)
 
 
 def load_config(top_config: Path | None = None) -> AppConfig:
@@ -83,7 +102,7 @@ def load_config(top_config: Path | None = None) -> AppConfig:
     sources: list[SourceConfig] = []
     for entry in data.get("sources", []):
         src_path = _expand(entry["path"])
-        watched_roots, targets = _load_source_config(src_path)
+        watched_roots, targets, ignore_keys = _load_source_config(src_path)
         sources.append(
             SourceConfig(
                 name=entry["name"],
@@ -92,6 +111,7 @@ def load_config(top_config: Path | None = None) -> AppConfig:
                 remote=entry.get("remote"),
                 watched_roots=watched_roots,
                 targets=targets,
+                ignore_keys=ignore_keys,
             )
         )
 

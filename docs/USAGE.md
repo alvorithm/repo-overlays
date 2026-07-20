@@ -23,6 +23,7 @@ same files) into project worktrees, without committing it upstream.
 - **Overlay key**: A top-level directory in a source. Two kinds: 
     - *Fixed target*: Key starts with `_`. Bound to an absolute destination in the source's `config.toml`. Layout mirrors the destination 1:1.
     - *Project overlay*: Key does not start with `_`. Bound to a worktree by git remote slug (`owner_repo`), falling back to the directory basename if the slug doesn't match any source key. Uses `dot_X` → `.X` rewrite at materialisation.
+- **Ignored key**: A top-level directory declared as NOT an overlay key for its source — via `ignore_keys = ["dir", …]` in the source's `config.toml` or an `.overlay-ignore` file at the source root (one name per line, `#` comments, trailing `/` allowed). Lets a source repo carry non-overlay content (docs, staging dirs) without the name accidentally matching a repo under a watched root. Per-source: another source may still provide the same key.
 - **Partial**: `_shared/<name>.md` in any source. Referenced from templates as `{{>_shared/<name>.md}}`.
 - **Template**: Any file in a source ending in `.mo`. Rendered to `_rendered/<key>/<path>` (extension stripped). Non-`.mo` files are symlinked verbatim. 
 - **Live file**: The symlink at the destination that the agent reads/writes.
