@@ -34,6 +34,26 @@ Benefits:
 1. your personal guidance (i.e. `ai-overlay`) stays out of upstream, and private
 2. project notes can be git-shared 
 
+## Where overlays land: harnesses
+
+**Separation of concerns.** [chezmoi](https://www.chezmoi.io/) manages files that *applications* read (settings, keybindings). repo-overlays manages files that *LLM agents* read (`CLAUDE.md`, `AGENTS.md`, skills, slash commands). The two never fight over the same file.
+
+**Consuming harnesses.** Fixed-target keys deploy agent guidance into the config dirs of the harnesses in use — `pi`, `omp` (oh-my-pi), and Claude Code, with [Zed](https://zed.dev/) as an ACP front-end:
+
+| Fixed key | Destination | Read by |
+|-----------|-------------|---------|
+| `_claude` | `~/.config/claude` | Claude Code, omp |
+| `_pi`     | `~/.config/pi`     | pi |
+| `_omp`    | `~/.config/omp`    | omp |
+
+The watcher discovers project destinations under `~/Code` and `~/Ask`.
+
+Notes on the harnesses (context for why the targets look the way they do):
+
+- **Shared core** — pi and omp share the agent core and a JSONL session store; override the location with `--session-dir` (omp) or `PI_CODING_AGENT_SESSION_DIR` (pi).
+- **Skill discovery** — Claude Code and omp auto-discover skills from `~/.config/claude/skills/`; pi requires an explicit `skills` entry in its `settings.json`.
+- **Claude Code XDG** — Claude Code hard-codes `~/.claude`; a chezmoi-managed symlink `~/.claude → ~/.config/claude` keeps it XDG-compliant.
+
 ## Glossary
 
 | Term | Meaning |
