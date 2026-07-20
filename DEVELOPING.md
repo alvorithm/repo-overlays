@@ -61,7 +61,9 @@ for each (key, dest_root, is_fixed):
 
 **Dot-rewrite** — `_dot_rewrite()` (apply.py) replaces `dot_` prefix on each path component with `.`. Applied only for project overlays (`is_fixed=False`). Fixed targets keep paths verbatim.
 
-**Slug-fallback** — `_resolve_project_key()` (resolve.py) tries the git remote slug first, then falls back to the toplevel basename if no source has the slug-named key. Lets overlay keys be named after the repo basename (e.g. `beadpot`) even when the remote URL is `owner/beadpot`.
+**Slug-fallback** — `_resolve_project_key()` (resolve.py) resolves a destination to an overlay key by trying three candidates in order: (1) git remote slug (`owner_repo`), (2) toplevel directory basename, (3) bare git remote repo name (`repo`). The first that names a source key wins; if none match it falls back to the slug, else the basename. Step 2 lets keys be named after the repo basename (e.g. `beadpot`) even when the remote is `owner/beadpot`; step 3 lets a linked worktree match by repo identity regardless of its directory name.
+
+**Worktree resolution** — `_git_toplevel()` (resolve.py) handles both regular `.git` directories and linked-worktree `.git` files, resolving through the git common dir and origin remote URL. This is what makes the bare-remote-repo-name candidate (step 3 above) usable: a worktree checked out under an arbitrary directory name still resolves to the same overlay key as its main checkout.
 
 **Skip on re-entry** — `_already_applied()` (apply.py) checks the manifest before printing. If the destination already has a valid manifest with all symlinks in place, `apply_one` returns silently. Prevents noisy output on every `cd` into an already-applied repo.
 
@@ -104,3 +106,15 @@ systemctl --user start repo-overlay.service
 **Divergence false positives** — `status` detects diverged destinations by scanning `dest_root.rglob(".divergent")`. If two destination roots share a parent (e.g. one is a subdirectory of the other), a marker from the inner root will appear in the outer root's scan.
 
 **No Mustache variables** — templates support `{{>partial}}` inclusion only. `{{variable}}` and `{{#section}}` tags are passed through verbatim. Add variable substitution to `_resolve_partials` if needed.
+
+## Python coding conventions
+
+- **Docstrings** — Google style. Start with `Return …` (or describe the side effect for procedures), omit type annotations from the prose (they belong on the signature), and use single backticks for inline code, never double.
+- **Certifying tests** — must be functional or end-to-end. No setter/getter tests, no mocks. Tests build synthetic sources under `/tmp` (see `conftest.py`) and exercise the real pipeline.
+- **Dynamic imports** — `sys.path.insert` at runtime confuses the type checker; silence the resulting error with `# ty: ignore[unresolved-import]`. A trailing `# ty:` comment can trip ruff `PLC0415` (import-outside-top-level); make sure it does not conflict with an existing `# noqa` suppression on the same line.
+- **argparse** — avoid `argparse.FileType` (deprecated since Python 3.14). Accept path strings and open them after `parse_args()`, preserving the `-` convention for stdin/stdout.
+
+## Commit discipline
+
+- **One concern per commit** — keep unrelated changes in separate commits with their own documented messages, so history stays bisectable and reviewable.
+- **Always commit; `docs(<area>):` convention** — the docs-authoring skill mandates an always-commit policy and a `docs(<area>): …` subject line for documentation changes.
