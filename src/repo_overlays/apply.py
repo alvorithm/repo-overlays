@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -18,8 +19,15 @@ from .sources import SourceStack
 _HOME = Path.home()
 
 _MARKER_PREFIX = "# ── repo-overlays (auto-managed, do not edit between markers)"
-_MARKER_LEGACY = f"{_MARKER_PREFIX} ──"
 _MARKER_END = "# ── end repo-overlays ──"
+
+_EXCLUDE_BLOCK_RE = re.compile(
+    re.escape(_MARKER_PREFIX)
+    + r"(?: \[(?P<label>[^\]]*)\])? ──\n.*?"
+    + re.escape(_MARKER_END)
+    + r"\n*",
+    re.DOTALL,
+)
 
 
 def _marker_start(dest_root: Path) -> str:
@@ -143,23 +151,43 @@ def _update_git_exclude(dest_root: Path, link_paths: list[str]) -> None:
     lines.append(_MARKER_END)
     new_section = "\n".join(lines) + "\n"
 
-    # Replace this destination's block; adopt a pre-label block if present.
-    header = next(
-        (h for h in (marker_start, _MARKER_LEGACY) if h in existing),
-        None,
-    )
-    if header is not None:
-        start = existing.index(header)
-        end = existing.index(_MARKER_END, start) + len(_MARKER_END)
-        while end < len(existing) and existing[end] == "\n":
-            end += 1
-        updated = existing[:start] + new_section + existing[end:]
-    else:
-        if existing and not existing.endswith("\n"):
-            existing += "\n"
-        updated = existing + new_section
+    exclude_file.write_text(_merge_exclude_blocks(existing, dest_root, new_section))
 
-    exclude_file.write_text(updated)
+
+def _merge_exclude_blocks(existing: str, dest_root: Path, new_section: str) -> str:
+    """Return *existing* with *dest_root*'s block set to *new_section*.
+
+    Blocks of other destinations are preserved, except when their labelled
+    destination no longer exists on disk: a moved or deleted worktree would
+    otherwise leave its entries in the shared file forever (`git worktree move`
+    is a normal operation, and the file is shared across all worktrees).
+    An unlabelled block predates labelling and is adopted once.
+    """
+    ours = _marker_start(dest_root)
+    adopt_legacy = ours not in existing
+
+    out: list[str] = []
+    written = False
+    pos = 0
+    for m in _EXCLUDE_BLOCK_RE.finditer(existing):
+        label = m.group("label")
+        out.append(existing[pos:m.start()])
+        pos = m.end()
+        is_ours = label == str(dest_root) or (label is None and adopt_legacy)
+        if is_ours:
+            if not written:
+                out.append(new_section)
+                written = True
+        elif label is None or Path(label).is_dir():
+            out.append(m.group(0))
+    out.append(existing[pos:])
+
+    updated = "".join(out)
+    if not written:
+        if updated and not updated.endswith("\n"):
+            updated += "\n"
+        updated += new_section
+    return updated
 
 
 def _apply_key(

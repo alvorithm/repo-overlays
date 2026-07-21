@@ -624,3 +624,45 @@ def test_git_dir_overlay_skipped_outside_git_repo(tmp: Path) -> None:
 
     assert (fixed_dest / "CONFIG.md").is_symlink()
     assert not (fixed_dest / ".git" / "hooks" / "post-merge").exists()
+
+
+def test_exclude_drops_blocks_of_vanished_destinations(tmp: Path) -> None:
+    """A moved or deleted worktree's block is garbage-collected on next apply.
+
+    info/exclude is shared across worktrees, so nothing else would ever remove
+    the entries of a destination that no longer exists.
+    """
+    from repo_overlays.apply import _merge_exclude_blocks, _MARKER_END, _marker_start
+
+    live = tmp / "live"
+    live.mkdir()
+    gone = tmp / "gone"
+    other = tmp / "other"
+    other.mkdir()
+
+    def block(dest: Path, entry: str) -> str:
+        return f"{_marker_start(dest)}\n/{entry}\n{_MARKER_END}\n"
+
+    existing = "# handwritten\n" + block(gone, "GONE.md") + block(other, "OTHER.md")
+    merged = _merge_exclude_blocks(existing, live, block(live, "LIVE.md"))
+
+    assert "# handwritten" in merged
+    assert "/OTHER.md" in merged, "live destination's block must survive"
+    assert "/GONE.md" not in merged, "vanished destination's block must be dropped"
+    assert "/LIVE.md" in merged
+    # Re-running is a fixed point.
+    assert _merge_exclude_blocks(merged, live, block(live, "LIVE.md")) == merged
+
+
+def test_exclude_adopts_unlabelled_legacy_block(tmp: Path) -> None:
+    """A block written before per-destination labelling is replaced, not duplicated."""
+    from repo_overlays.apply import _merge_exclude_blocks, _MARKER_END, _MARKER_PREFIX, _marker_start
+
+    dest = tmp / "dest"
+    dest.mkdir()
+    legacy = f"{_MARKER_PREFIX} ──\n/OLD.md\n{_MARKER_END}\n"
+    new = f"{_marker_start(dest)}\n/NEW.md\n{_MARKER_END}\n"
+
+    merged = _merge_exclude_blocks(legacy, dest, new)
+    assert "/OLD.md" not in merged
+    assert merged.count("/NEW.md") == 1
