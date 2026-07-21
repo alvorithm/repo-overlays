@@ -53,3 +53,51 @@ def test_watch_registers_watches_with_supported_mask(
 
     assert stub_inotify.watched, "no inotify watches registered"
     assert all(mask == _WATCH_FLAGS for _p, mask in stub_inotify.watched)
+
+
+class _Event:
+    """Minimal stand-in for inotify_simple's Event tuple."""
+
+    def __init__(self, wd: int, mask: int, cookie: int, name: str) -> None:
+        self.wd, self.mask, self.cookie, self.name = wd, mask, cookie, name
+
+
+def test_directory_rename_is_recorded_as_a_pair(tmp: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A moved directory is logged as (old, new), the form a rewrite needs.
+
+    inotify reports a rename as MOVED_FROM + MOVED_TO sharing a cookie; the
+    pair is what makes a stale-path rewrite exact rather than guessed.
+    """
+    from repo_overlays.events import log_path
+    from repo_overlays.watch import _IN_ISDIR, _IN_MOVED_FROM, _IN_MOVED_TO, _note_rename
+
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp / "state"))
+    wd_paths = {1: tmp / "Overlays"}
+    pending: dict[int, Path] = {}
+
+    _note_rename(_Event(1, _IN_MOVED_FROM | _IN_ISDIR, 42, "ai-overlay"), wd_paths, pending)
+    assert not log_path().exists(), "half a rename is not a rename"
+    _note_rename(_Event(1, _IN_MOVED_TO | _IN_ISDIR, 42, "defaults"), wd_paths, pending)
+
+    line = log_path().read_text().strip().split("\t")
+    assert line[1] == "rename"
+    assert line[2] == str(tmp / "Overlays" / "ai-overlay")
+    assert line[3] == str(tmp / "Overlays" / "defaults")
+
+
+def test_file_moves_and_unpaired_moves_are_not_recorded(tmp: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only completed *directory* moves are events; editor churn is not."""
+    from repo_overlays.events import log_path
+    from repo_overlays.watch import _IN_ISDIR, _IN_MOVED_FROM, _IN_MOVED_TO, _note_rename
+
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp / "state"))
+    wd_paths = {1: tmp / "Code"}
+    pending: dict[int, Path] = {}
+
+    # A file rename (no ISDIR) — editors do this constantly.
+    _note_rename(_Event(1, _IN_MOVED_FROM, 7, "notes.md"), wd_paths, pending)
+    _note_rename(_Event(1, _IN_MOVED_TO, 7, "notes.md~"), wd_paths, pending)
+    # A directory moved *out* of the watched set: no destination to record.
+    _note_rename(_Event(1, _IN_MOVED_FROM | _IN_ISDIR, 9, "gone"), wd_paths, pending)
+
+    assert not log_path().exists()

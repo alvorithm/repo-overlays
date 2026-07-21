@@ -108,7 +108,7 @@
       <rect x="1045.7149" width="180" height="36.7999" y="298.4088" clip-path="url(#clipPath2)" stroke="none"/>
     </g>
     <g stroke-linecap="butt" font-size="14px" transform="matrix(1,0,0,1,42,153)" fill="rgb(64,0,0)" text-rendering="geometricPrecision" font-family="'Fira Sans Condensed'" shape-rendering="geometricPrecision" stroke="rgb(64,0,0)" font-weight="bold" stroke-miterlimit="1.45">
-      <text x="1071.7114" xml:space="preserve" y="321.4988" clip-path="url(#clipPath2)" stroke="none">ai-overlay (lang partials)</text>
+      <text x="1071.7114" xml:space="preserve" y="321.4988" clip-path="url(#clipPath2)" stroke="none">defaults (lang partials)</text>
     </g>
     <g stroke-linecap="butt" transform="matrix(1,0,0,1,42,153)" fill="rgb(242,179,179)" text-rendering="geometricPrecision" shape-rendering="geometricPrecision" stroke="rgb(242,179,179)" stroke-width="2" stroke-miterlimit="1.45">
       <rect x="1045.7149" y="298.4088" clip-path="url(#clipPath2)" fill="none" width="180" rx="4" ry="4" height="357.0254"/>
@@ -148,7 +148,7 @@
       <rect x="305.3595" width="717.7099" height="36.7999" y="157.6895" clip-path="url(#clipPath2)" stroke="none"/>
     </g>
     <g stroke-linecap="butt" font-size="14px" transform="matrix(1,0,0,1,42,153)" fill="rgb(64,0,0)" text-rendering="geometricPrecision" font-family="'Fira Sans Condensed'" shape-rendering="geometricPrecision" stroke="rgb(64,0,0)" font-weight="bold" stroke-miterlimit="1.45">
-      <text x="950.6017" xml:space="preserve" y="180.7795" clip-path="url(#clipPath2)" stroke="none">ai-overlay </text>
+      <text x="950.6017" xml:space="preserve" y="180.7795" clip-path="url(#clipPath2)" stroke="none">defaults </text>
     </g>
     <g stroke-linecap="butt" transform="matrix(1,0,0,1,42,153)" fill="rgb(242,179,179)" text-rendering="geometricPrecision" shape-rendering="geometricPrecision" stroke="rgb(242,179,179)" stroke-width="2" stroke-miterlimit="1.45">
       <rect x="305.3595" y="157.6895" clip-path="url(#clipPath2)" fill="none" width="717.7099" rx="4" ry="4" height="667.4623"/>

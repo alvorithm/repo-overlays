@@ -220,6 +220,37 @@ partial sweep — a manifest read plus one stat per link, tens of milliseconds,
 and silent when clean. That form is meant for a directory-enter hook, next to
 `repo-overlay apply`, the way `chezmoi status` is used.
 
+### The event log
+
+Two things happen once and matter later, so both are appended to
+`$XDG_STATE_HOME/repo-overlays/events.log` (tab-separated, append-only):
+
+```
+2026-07-21T14:18:28+02:00	drift	/home/alvar/Code/beadpot/work/notes/guide.md
+2026-07-21T18:08:23+02:00	rename	/home/alvar/Overlays/ai-overlay	/home/alvar/Overlays/defaults
+```
+
+- **`drift`** — every drift notification. A desktop popup vanishes, and the
+  apply that raised it may have run in a terminal nobody was watching; "what
+  was that notification?" has to stay answerable.
+- **`rename`** — every *directory* move the watcher observes. inotify reports a
+  rename as `IN_MOVED_FROM` + `IN_MOVED_TO` sharing a cookie, so the pair is
+  exact rather than inferred. File moves are ignored (editors rename
+  constantly); a directory moved out of the watched set is ignored too, having
+  no destination to record.
+
+The log has no reader of its own, deliberately. A directory move invalidates
+stored paths well outside this tool — documentation, notes, a memory system's
+records — and each of those consumers knows its own substrate. Ours records the
+fact; they decide what it means. The memory system, for instance, consumes
+`rename` lines with `curate.py paths --from-log`.
+
+Scope: sources are watched recursively (depth 3) and their parent directory
+non-recursively, so renaming a source directory itself is caught; `watched_roots`
+are watched at their top level, so renaming a repo inside one is caught, but
+moves deeper inside a repo are not. A move across filesystems arrives as an
+unpaired delete + create and is not a rename at all — inotify gives no cookie.
+
 On a successful apply you'll see output like:
 ```
 Overlay beadpot (defaults, beadpot-docs) → ~/Code/beadpot

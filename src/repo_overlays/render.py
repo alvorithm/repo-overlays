@@ -6,10 +6,10 @@ import hashlib
 import os
 import re
 import subprocess
-from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
+from .events import record
 from .sources import SourceStack, SourceConfig
 
 
@@ -99,12 +99,6 @@ def _resolve_partials(template: str, loader: _PartialLoader) -> str:
     return _PARTIAL_RE.sub(_replace, template)
 
 
-def _event_log() -> Path:
-    """Return the append-only drift log (``$XDG_STATE_HOME/repo-overlays/events.log``)."""
-    state = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
-    return Path(state) / "repo-overlays" / "events.log"
-
-
 def _notify(path: Path) -> None:
     """Raise a desktop notification for drift, and record it.
 
@@ -118,14 +112,7 @@ def _notify(path: Path) -> None:
         # on a real session: a drift fixture is not a drift.
         return
 
-    stamp = datetime.now().astimezone().isoformat(timespec="seconds")
-    try:
-        log = _event_log()
-        log.parent.mkdir(parents=True, exist_ok=True)
-        with log.open("a") as f:
-            f.write(f"{stamp}\tdrift\t{path}\n")
-    except OSError:
-        pass
+    record("drift", str(path))
 
     try:
         subprocess.run(
