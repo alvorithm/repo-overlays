@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 from typing import Iterator
 
@@ -10,6 +11,14 @@ from .config import AppConfig, SourceConfig
 
 
 _NAMED_PARTIAL_RE = re.compile(r"^@(?P<name>[^/]+)/(?P<rest>.+)$")
+
+#: Editor leftovers. Materialising `settings.json~` next to `settings.json`
+#: puts junk in the destination repo and can confuse the reading application.
+_BACKUP_SUFFIXES = ("~", ".swp", ".swo", ".orig", ".rej")
+
+
+def _is_editor_backup(name: str) -> bool:
+    return name.endswith(_BACKUP_SUFFIXES) or (name.startswith(".#"))
 
 
 class SourceStack:
@@ -41,8 +50,12 @@ class SourceStack:
     def iter_files_for_key(self, key: str) -> Iterator[tuple[Path, SourceConfig]]:
         """Yield (absolute_file_path, source) for each file under key.
 
-        Later sources override earlier ones on per-relative-path conflict.
-        Yields in final precedence order (each file once, from winning source).
+        Later sources override earlier ones on per-relative-path conflict, and
+        every override is reported: overriding is *whole-file*, never a merge,
+        so two sources contributing the same path silently discard one of them.
+        That is the hazard when one key is served by several sources (guidance
+        in one, memory wiring in another).  Yields in final precedence order
+        (each file once, from the winning source).
         """
         # Build map: rel_path → (abs_path, source); later sources win.
         merged: dict[Path, tuple[Path, SourceConfig]] = {}
@@ -53,9 +66,16 @@ class SourceStack:
             if not key_dir.is_dir():
                 continue
             for abs_path in key_dir.rglob("*"):
-                if not abs_path.is_file():
+                if not abs_path.is_file() or _is_editor_backup(abs_path.name):
                     continue
                 rel = abs_path.relative_to(key_dir)
+                if rel in merged:
+                    loser = merged[rel][1]
+                    print(
+                        f"  override: {key}/{rel}: {src.name} replaces {loser.name} "
+                        "(whole file, not merged)",
+                        file=sys.stderr,
+                    )
                 merged[rel] = (abs_path, src)
         yield from ((abs_path, src) for abs_path, src in merged.values())
 

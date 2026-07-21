@@ -131,3 +131,42 @@ def test_privacy_private_requesting_public_is_allowed(tmp: Path) -> None:
     requesting = config.sources[0]  # personal (private)
     result = stack.resolve_partial("_shared/shared.md", requesting_source=requesting)
     assert result.read_text() == "public content"
+
+
+def test_cross_source_override_is_reported(tmp: Path, capsys: pytest.CaptureFixture) -> None:
+    """Two sources providing the same key+path: the loser is named, not silent.
+
+    Overriding is whole-file, so a key served by several sources (guidance in
+    one, memory wiring in another) can silently discard settings. USAGE.md has
+    documented this warning since the beginning; the code never printed it.
+    """
+    s1 = make_source(tmp, "guidance")
+    s2 = make_source(tmp, "memory")
+    for src, body in ((s1, "guidance version"), (s2, "memory version")):
+        (src / "beadpot" / "dot_claude").mkdir(parents=True)
+        (src / "beadpot" / "dot_claude" / "settings.json").write_text(body)
+
+    stack = SourceStack(AppConfig(sources=[
+        SourceConfig(name="guidance", path=s1),
+        SourceConfig(name="memory", path=s2),
+    ]))
+    files = list(stack.iter_files_for_key("beadpot"))
+
+    assert len(files) == 1
+    assert files[0][0].read_text() == "memory version"
+    err = capsys.readouterr().err
+    assert "override: beadpot/dot_claude/settings.json" in err
+    assert "memory replaces guidance" in err
+
+
+def test_editor_backups_are_not_materialised(tmp: Path) -> None:
+    """`settings.json~` and friends never become live files."""
+    src = make_source(tmp, "personal")
+    (src / "penpot" / "dot_claude").mkdir(parents=True)
+    (src / "penpot" / "dot_claude" / "settings.json").write_text("{}")
+    (src / "penpot" / "dot_claude" / "settings.json~").write_text("{}")
+    (src / "penpot" / "notes.md.swp").write_text("junk")
+
+    stack = SourceStack(AppConfig(sources=[SourceConfig(name="personal", path=src)]))
+    names = {p.name for p, _ in stack.iter_files_for_key("penpot")}
+    assert names == {"settings.json"}, names
