@@ -18,13 +18,13 @@ agent finds them without the project repo knowing they exist.
 
 ### Example
 You have a private `ai-overlay` with your coding-style guidance and a
-public `beadpot-docs.wiki` with domain knowledge. That makes two sources. Running `repo-overlay apply` produces at the target `~/Code/beadpot/`
+public `beadpot-docs` with domain knowledge. That makes two sources. Running `repo-overlay apply` produces at the target `~/Code/beadpot/`
 ```bash
 ~/Code/beadpot/
 ├── CLAUDE.md         #← ai-overlay/_rendered/beadpot/CLAUDE.md (from template)
 └── .claude/
     └── skills/
-        └── test-feature.md  #← beadpot-docs.wiki/beadpot/dot_claude/skills/test-feature.md
+        └── test-feature.md  #← beadpot-docs/beadpot/dot_claude/skills/test-feature.md
 ```
 
 Neither file is committed to `~/Code/beadpot/`. The agent reads them as if
@@ -82,13 +82,23 @@ the `penpot` overlay key:
 ~/Code/penpot/.claude/worktrees/foo     → key `penpot` (a Claude Code worktree)
 ```
 
-Recommended convention: a flat `~/Code/worktrees/<repo>-<branch>` — top-level,
-grouped, and an immediate child of the `~/Code` watched_root. Overlays apply on
-`cd` / file-open via the hooks at any depth; the file-watcher's auto-reapply on
-*source* changes covers worktrees within 5 path components of a watched_root
-(so keep them shallow — flat under `~/Code/worktrees` is fine). A separate
-top-level tree like `~/Worktrees` works equally well; just add it to
-`watched_roots` since it is not under an existing one.
+Recommended convention: a flat `~/Worktrees/<repo>-<branch>`, added to
+`watched_roots`. Location is a convention, not a constraint: linked worktrees
+are enumerated with `git worktree list`, so they are found wherever they are
+checked out, as long as the **main** checkout sits under a watched_root.
+Overlays also apply on `cd` / file-open via the hooks, from any path.
+
+A worktree receives its repo's overlay like any other checkout. To exclude one,
+drop an empty **`.repo-overlays-skip`** file at its root: the next apply removes
+whatever it had installed there (links, manifest, `info/exclude` block) and
+leaves it alone from then on. Per-destination, so it suits a short-lived
+worktree better than a config entry would.
+
+Tools create worktrees in their own places unless told otherwise — Claude Code
+in `<repo>/.claude/worktrees/`, omp in `~/.omp/wt`. Steering them to one tree is
+per-tool: omp has a `worktree.base` setting (`OMP_WORKTREE_DIR` overrides);
+Claude Code has no base-directory setting and needs a `WorktreeCreate` hook,
+which replaces its git logic and returns the directory to use.
 
 ## Installation
 
@@ -194,6 +204,6 @@ repo-overlay promote    # interactive: reconcile agent-edited files
 
 | Repo | Path | Visibility | Purpose |
 |------|------|-----------|---------|
-| ai-overlay | `~/Code/ai-overlay` | private | Personal voice/style/language partials; orchestrating templates |
-| penpot-docs.wiki | `~/Code/penpot-docs.wiki` | public | Penpot data model and implementation |
-| beadpot-docs.wiki | `~/Code/beadpot-docs.wiki` | public | beadpot model schemas, graph ingestion pipeline, skills |
+| ai-overlay | `~/Overlays/ai-overlay` | private | Personal voice/style/language partials; orchestrating templates |
+| penpot-docs | `~/Overlays/penpot-docs` | public | Penpot data model and implementation |
+| beadpot-docs | `~/Overlays/beadpot-docs` | public | beadpot model schemas, graph ingestion pipeline, skills |

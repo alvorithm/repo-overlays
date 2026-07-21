@@ -211,8 +211,14 @@ repo-overlay render <src> <dst>  # (internal) render one template
 repo-overlay watch [--once]      # inotify daemon; --once runs apply_all and exits
 repo-overlay list                # list every live symlink ($HOME-relative), one per line
 repo-overlay config              # print effective sources, targets, watched_roots
-repo-overlay status              # reports drifts / broken links / missing partials
+repo-overlay status [<path>]     # reports drifts / broken links / missing partials
 ```
+
+`status` without an argument sweeps every destination (~0.2 s here). With a
+path it checks only the destination containing it and skips the template
+partial sweep — a manifest read plus one stat per link, tens of milliseconds,
+and silent when clean. That form is meant for a directory-enter hook, next to
+`repo-overlay apply`, the way `chezmoi status` is used.
 
 On a successful apply you'll see output like:
 ```
@@ -299,8 +305,8 @@ private = true                       # never referenced from public output
 
 [[sources]]
 name = "beadpot-docs"
-path = "~/Code/beadpot-docs.wiki"    # local clone of a Codeberg wiki repo
-remote = "git@codeberg.org:<user>/beadpot-docs.wiki.git"
+path = "~/Overlays/beadpot-docs"    # local clone of a Codeberg wiki repo
+remote = "git@codeberg.org:<user>/beadpot-docs.git"
 ```
 
 Each source's own `config.toml` still declares its `[targets]` and `watched_roots`; the
@@ -397,6 +403,15 @@ When no key matches, the worktree gets no materialised symlinks. Read docs from 
 main checkout's already-materialised locations, and edit at the overlay source.
 Per-feature folders inside a shared overlay key (e.g. `work/wf-now/feature-scoping/`)
 cover branch-specific docs without per-worktree overlays.
+
+### Excluding one destination
+
+An empty `.repo-overlays-skip` file at a destination's root opts it out. On the
+next apply, anything already installed there is withdrawn — recorded links
+removed, manifest deleted, `info/exclude` block dropped — and the destination is
+skipped from then on. The decision lives next to the checkout it applies to,
+which is what a worktree needs; `ignore_keys` / `.overlay-ignore` are the
+source-side counterpart and exclude a *key*, not a destination.
 
 ### Git-dir destinations (`dot_git/…`)
 

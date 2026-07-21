@@ -51,7 +51,7 @@
                   <y:Geometry height="513.529352162679" width="257.0" x="0.6317919311524633" y="-84.42216634114573"/>
                   <y:Fill color="#DFF3E0" transparent="false"/>
                   <y:BorderStyle color="#33AA33" type="line" width="2.0"/>
-                  <y:NodeLabel alignment="right" autoSizePolicy="node_width" backgroundColor="#DFF3E0" borderDistance="0.0" bottomInset="10" fontFamily="Fira Sans Condensed" fontSize="14" fontStyle="bold" hasLineColor="false" height="36.7999267578125" horizontalTextPosition="center" iconTextGap="4" leftInset="10" modelName="internal" modelPosition="t" rightInset="10" textColor="#004400" topInset="10" verticalTextPosition="bottom" visible="true" width="257.0" x="0.0" xml:space="preserve" y="0.0"> beadpot-docs.wiki</y:NodeLabel>
+                  <y:NodeLabel alignment="right" autoSizePolicy="node_width" backgroundColor="#DFF3E0" borderDistance="0.0" bottomInset="10" fontFamily="Fira Sans Condensed" fontSize="14" fontStyle="bold" hasLineColor="false" height="36.7999267578125" horizontalTextPosition="center" iconTextGap="4" leftInset="10" modelName="internal" modelPosition="t" rightInset="10" textColor="#004400" topInset="10" verticalTextPosition="bottom" visible="true" width="257.0" x="0.0" xml:space="preserve" y="0.0"> beadpot-docs</y:NodeLabel>
                   <y:Shape type="roundrectangle"/>
                   <y:State closed="false" closedHeight="80.0" closedWidth="100.0" innerGraphDisplayEnabled="true"/>
                   <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
@@ -61,7 +61,7 @@
                   <y:Geometry height="80.0" width="100.0" x="-15.0" y="-15.0"/>
                   <y:Fill color="#DFF3E0" transparent="false"/>
                   <y:BorderStyle color="#33AA33" type="line" width="2.0"/>
-                  <y:NodeLabel alignment="left" autoSizePolicy="node_width" backgroundColor="#DFF3E0" borderDistance="0.0" fontFamily="Dialog" fontSize="14" fontStyle="bold" hasLineColor="false" height="20.296875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#004400" verticalTextPosition="bottom" visible="true" width="321.566162109375" x="-110.7830810546875" xml:space="preserve" y="0.0">&#127760; beadpot-docs.wiki  (Codeberg, public)</y:NodeLabel>
+                  <y:NodeLabel alignment="left" autoSizePolicy="node_width" backgroundColor="#DFF3E0" borderDistance="0.0" fontFamily="Dialog" fontSize="14" fontStyle="bold" hasLineColor="false" height="20.296875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#004400" verticalTextPosition="bottom" visible="true" width="321.566162109375" x="-110.7830810546875" xml:space="preserve" y="0.0">&#127760; beadpot-docs  (Codeberg, public)</y:NodeLabel>
                   <y:Shape type="roundrectangle"/>
                   <y:State closed="true" closedHeight="80.0" closedWidth="100.0" innerGraphDisplayEnabled="true"/>
                   <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
@@ -126,7 +126,7 @@
                   <y:Geometry height="348.7347021458944" width="257.0" x="0.6317919311524349" y="453.40229607899994"/>
                   <y:Fill color="#DFF3E0" transparent="false"/>
                   <y:BorderStyle color="#33AA33" type="line" width="2.0"/>
-                  <y:NodeLabel alignment="right" autoSizePolicy="node_width" backgroundColor="#DFF3E0" borderDistance="0.0" bottomInset="10" fontFamily="Fira Sans Condensed" fontSize="14" fontStyle="bold" hasLineColor="false" height="36.7999267578125" horizontalTextPosition="center" iconTextGap="4" leftInset="10" modelName="internal" modelPosition="t" rightInset="10" textColor="#004400" topInset="10" verticalTextPosition="bottom" visible="true" width="257.0" x="0.0" xml:space="preserve" y="0.0">penpot-docs.wiki</y:NodeLabel>
+                  <y:NodeLabel alignment="right" autoSizePolicy="node_width" backgroundColor="#DFF3E0" borderDistance="0.0" bottomInset="10" fontFamily="Fira Sans Condensed" fontSize="14" fontStyle="bold" hasLineColor="false" height="36.7999267578125" horizontalTextPosition="center" iconTextGap="4" leftInset="10" modelName="internal" modelPosition="t" rightInset="10" textColor="#004400" topInset="10" verticalTextPosition="bottom" visible="true" width="257.0" x="0.0" xml:space="preserve" y="0.0">penpot-docs</y:NodeLabel>
                   <y:Shape type="roundrectangle"/>
                   <y:State closed="false" closedHeight="80.0" closedWidth="100.0" innerGraphDisplayEnabled="true"/>
                   <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
@@ -136,7 +136,7 @@
                   <y:Geometry height="80.0" width="100.0" x="-15.0" y="-15.0"/>
                   <y:Fill color="#DFF3E0" transparent="false"/>
                   <y:BorderStyle color="#33AA33" type="line" width="2.0"/>
-                  <y:NodeLabel alignment="left" autoSizePolicy="node_width" backgroundColor="#DFF3E0" borderDistance="0.0" fontFamily="Dialog" fontSize="14" fontStyle="bold" hasLineColor="false" height="20.296875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#004400" verticalTextPosition="bottom" visible="true" width="312.064208984375" x="-106.0321044921875" xml:space="preserve" y="0.0">&#127760; penpot-docs.wiki  (Codeberg, public)</y:NodeLabel>
+                  <y:NodeLabel alignment="left" autoSizePolicy="node_width" backgroundColor="#DFF3E0" borderDistance="0.0" fontFamily="Dialog" fontSize="14" fontStyle="bold" hasLineColor="false" height="20.296875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#004400" verticalTextPosition="bottom" visible="true" width="312.064208984375" x="-106.0321044921875" xml:space="preserve" y="0.0">&#127760; penpot-docs  (Codeberg, public)</y:NodeLabel>
                   <y:Shape type="roundrectangle"/>
                   <y:State closed="true" closedHeight="80.0" closedWidth="100.0" innerGraphDisplayEnabled="true"/>
                   <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
