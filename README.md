@@ -17,11 +17,11 @@ You maintain one or more **overlay source repos** containing Markdown files
 agent finds them without the project repo knowing they exist.
 
 ### Example
-You have a private `ai-overlay` with your coding-style guidance and a
+You have a private `defaults` with your coding-style guidance and a
 public `beadpot-docs` with domain knowledge. That makes two sources. Running `repo-overlay apply` produces at the target `~/Code/beadpot/`
 ```bash
 ~/Code/beadpot/
-├── CLAUDE.md         #← ai-overlay/_rendered/beadpot/CLAUDE.md (from template)
+├── CLAUDE.md         #← defaults/_rendered/beadpot/CLAUDE.md (from template)
 └── .claude/
     └── skills/
         └── test-feature.md  #← beadpot-docs/beadpot/dot_claude/skills/test-feature.md
@@ -31,7 +31,7 @@ Neither file is committed to `~/Code/beadpot/`. The agent reads them as if
 they were native to the project. 
 
 Benefits:
-1. your personal guidance (i.e. `ai-overlay`) stays out of upstream, and private
+1. your personal guidance (i.e. `defaults`) stays out of upstream, and private
 2. project notes can be git-shared 
 
 ## Where overlays land: harnesses
@@ -156,7 +156,7 @@ The `|| true` absorbs the exit 1 that occurs when the directory has no matching 
 
 On entry, you'll see a brief output line:
 ```
-Overlay beadpot (personal, beadpot-docs) → ~/Code/beadpot
+Overlay beadpot (defaults, beadpot-docs) → ~/Code/beadpot
 ```
 Re-entering an already-applied repo (or cd'ing into one of its subdirectories)
 is silent — the overlay is already in place once materialised.
@@ -204,6 +204,6 @@ repo-overlay promote    # interactive: reconcile agent-edited files
 
 | Repo | Path | Visibility | Purpose |
 |------|------|-----------|---------|
-| ai-overlay | `~/Overlays/ai-overlay` | private | Personal voice/style/language partials; orchestrating templates |
+| defaults | `~/Overlays/defaults` | private | Personal voice/style/language partials; orchestrating templates |
 | penpot-docs | `~/Overlays/penpot-docs` | public | Penpot data model and implementation |
 | beadpot-docs | `~/Overlays/beadpot-docs` | public | beadpot model schemas, graph ingestion pipeline, skills |

@@ -222,8 +222,8 @@ and silent when clean. That form is meant for a directory-enter hook, next to
 
 On a successful apply you'll see output like:
 ```
-Overlay beadpot (personal, beadpot-docs) → ~/Code/beadpot
-Overlay _claude (personal) → ~/.config/claude
+Overlay beadpot (defaults, beadpot-docs) → ~/Code/beadpot
+Overlay _claude (defaults) → ~/.config/claude
 ```
 
 * Source names in parentheses show which repos contribute to the key.
