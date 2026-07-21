@@ -27,6 +27,10 @@ class LinkRecord:
 @dataclass
 class Manifest:
     links: list[LinkRecord] = field(default_factory=list)
+    #: Live files found diverged on the last apply, relative to dest_root.
+    #: A diverged file is *not* a link (apply refuses to overwrite it), so its
+    #: location would otherwise be unrecoverable — see divergent_markers().
+    drift: list[str] = field(default_factory=list)
 
     def by_path(self) -> dict[str, LinkRecord]:
         return {lr.path: lr for lr in self.links}
@@ -52,15 +56,16 @@ def read(dest_root: Path) -> Manifest:
         )
         for lr in data.get("link", [])
     ]
-    return Manifest(links=links)
+    return Manifest(links=links, drift=list(data.get("drift", [])))
 
 
-def write(dest_root: Path, links: list[LinkRecord]) -> None:
+def write(dest_root: Path, links: list[LinkRecord], drift: list[str] | None = None) -> None:
     """Write manifest to dest_root."""
     dest_root.mkdir(parents=True, exist_ok=True)
     data: dict = {
         "schema": SCHEMA_VERSION,
         "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "drift": sorted(drift or []),
         "link": [
             {
                 "path": lr.path,
@@ -83,9 +88,12 @@ def divergent_markers(dest_root: Path) -> list[Path]:
     links.  Walking the whole destination tree instead costs seconds on large
     repos and finds nothing extra.
     """
+    manifest = read(dest_root)
     dirs = {dest_root}
-    for lr in read(dest_root).links:
+    for lr in manifest.links:
         dirs.add((dest_root / lr.path).parent)
+    for rel in manifest.drift:
+        dirs.add((dest_root / rel).parent)
     return sorted(d / ".divergent" for d in dirs if (d / ".divergent").exists())
 
 
@@ -102,5 +110,5 @@ def prune(dest_root: Path, current_paths: set[str]) -> list[str]:
             if link.is_symlink():
                 link.unlink()
                 pruned.append(lr.path)
-    write(dest_root, kept)
+    write(dest_root, kept, manifest.drift)
     return pruned

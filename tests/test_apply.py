@@ -773,3 +773,35 @@ def test_dangling_link_is_repointed_not_dropped(tmp: Path) -> None:
     assert link.resolve() == (overlay / "AGENTS.md").resolve()
     assert link.read_text() == "guidance"
     assert {lr.path for lr in read_manifest(project).links} == {"AGENTS.md"}
+
+
+def test_drift_in_subdirectory_is_reported_by_status(tmp: Path) -> None:
+    """A diverged file deep in the tree stays visible to status.
+
+    Regression: drift markers were located from the manifest's link records,
+    but a diverged file is not a link — apply refuses to overwrite it — so the
+    marker in a subdirectory holding no other overlay file was invisible.
+    The notification fired and `status` still reported everything clean.
+    """
+    from repo_overlays.manifest import divergent_markers, read as read_m
+
+    src_dir = make_source(tmp, "personal")
+    project = tmp / "myproject"
+    _git_init(project)
+    overlay = src_dir / "myproject"
+    (overlay / "work" / "notes").mkdir(parents=True)
+    (overlay / "work" / "notes" / "guide.md.mo").write_text("v1\n")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+    apply_one(project, config)
+
+    live = project / "work" / "notes" / "guide.md"
+    live.unlink()
+    live.write_text("the agent's own version\n")
+    (overlay / "work" / "notes" / "guide.md.mo").write_text("v2\n")
+    apply_one(project, config)
+
+    assert (project / "work" / "notes" / ".divergent").exists()
+    assert read_m(project).drift == ["work/notes/guide.md"]
+    found = {str(p.relative_to(project)) for p in divergent_markers(project)}
+    assert found == {"work/notes/.divergent"}, found

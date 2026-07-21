@@ -209,9 +209,15 @@ def _apply_key(
     is_fixed: bool,
     stack: SourceStack,
     config: AppConfig,
-) -> list[LinkRecord]:
-    """Materialise one overlay key into dest_root; return link records installed."""
+) -> tuple[list[LinkRecord], list[str]]:
+    """Materialise one overlay key into dest_root.
+
+    Returns the link records installed and the destination-relative paths of
+    live files found diverged (kept as-is, with a ``.proposed`` render beside
+    them).
+    """
     links: list[LinkRecord] = []
+    drift: list[str] = []
 
     for abs_src, src in stack.iter_files_for_key(key):
         key_dir = src.path / key
@@ -248,6 +254,7 @@ def _apply_key(
                     f"  drift: {live_dest_rel} (kept live; .proposed written)",
                     file=sys.stderr,
                 )
+                drift.append(str(live_dest_rel))
                 continue
             link_target = rendered_dest
             final_dest = live_dest
@@ -298,7 +305,7 @@ def _apply_key(
             )
         )
 
-    return links
+    return links, drift
 
 
 def _already_applied(dest_root: Path, key: str) -> bool:
@@ -394,7 +401,7 @@ def _apply_and_record(
 
     print(f"Overlay {key} ({', '.join(sources)}) → {_fmt_path(dest_root)}")
     try:
-        links = _apply_key(key, dest_root, is_fixed, stack, config)
+        links, drift = _apply_key(key, dest_root, is_fixed, stack, config)
         current_paths = {lr.path for lr in links}
 
         # Remove links that are no longer produced, then record exactly what
@@ -404,7 +411,7 @@ def _apply_and_record(
         pruned = prune(dest_root, current_paths)
         if pruned:
             print(f"  pruned: {pruned}")
-        write(dest_root, links)
+        write(dest_root, links, drift)
         _update_git_exclude(dest_root, list(current_paths))
     except OSError as e:
         print(f"  error: {_fmt_path(dest_root)}: {type(e).__name__}: {e}", file=sys.stderr)

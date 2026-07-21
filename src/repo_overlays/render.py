@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -97,7 +99,29 @@ def _resolve_partials(template: str, loader: _PartialLoader) -> str:
     return _PARTIAL_RE.sub(_replace, template)
 
 
+def _event_log() -> Path:
+    """Return the append-only drift log (``$XDG_STATE_HOME/repo-overlays/events.log``)."""
+    state = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+    return Path(state) / "repo-overlays" / "events.log"
+
+
 def _notify(path: Path) -> None:
+    """Raise a desktop notification for drift, and record it.
+
+    Desktop notifications are ephemeral and the interactive apply that emitted
+    one may have scrolled away in a terminal nobody is watching, so every
+    notification is also appended to a log: "what was that notification?" has
+    to be answerable afterwards.
+    """
+    stamp = datetime.now().astimezone().isoformat(timespec="seconds")
+    try:
+        log = _event_log()
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with log.open("a") as f:
+            f.write(f"{stamp}\tdrift\t{path}\n")
+    except OSError:
+        pass
+
     try:
         subprocess.run(
             ["notify-send", "-u", "normal", "repo-overlays drift", str(path)],

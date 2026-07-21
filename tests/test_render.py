@@ -19,6 +19,8 @@ import pytest
 from repo_overlays.config import AppConfig, SourceConfig
 from repo_overlays.render import render_template
 from repo_overlays.sources import SourceStack
+from tests.conftest import make_source
+from repo_overlays.sources import SourceStack
 from tests.conftest import make_source, make_top_config
 
 
@@ -173,3 +175,31 @@ def test_nested_partial_resolution(tmp: Path) -> None:
     _, stack = _stack_from_dirs(tmp, (src_dir, "src1", False))
     render_template(src=template, rendered_dest=rendered, stack=stack)
     assert rendered.read_text() == "top: outer: inner content"
+
+
+def test_drift_is_logged_for_later_inspection(tmp: Path, monkeypatch) -> None:
+    """Every drift notification is also appended to the event log.
+
+    A desktop notification vanishes; the log is what makes "what was that
+    notification?" answerable minutes later.
+    """
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp / "state"))
+
+    src = make_source(tmp, "personal")
+    template = src / "guide.md.mo"
+    template.write_text("v1\n")
+    rendered = src / "_rendered" / "guide.md"
+    live = tmp / "live-guide.md"
+
+    stack = SourceStack(AppConfig(sources=[SourceConfig(name="personal", path=src)]))
+    assert render_template(src=template, rendered_dest=rendered, stack=stack, live_dest=None) == "ok"
+
+    live.write_text("the agent's own version\n")
+    template.write_text("v2\n")
+    status = render_template(src=template, rendered_dest=rendered, stack=stack, live_dest=live)
+    assert status == "diverged"
+
+    log = tmp / "state" / "repo-overlays" / "events.log"
+    assert log.exists(), "drift must be recorded"
+    line = log.read_text().strip()
+    assert "drift" in line and str(live) in line
