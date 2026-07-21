@@ -65,6 +65,10 @@ for each (key, dest_root, is_fixed):
 
 **Worktree resolution** — `_git_toplevel()` (resolve.py) handles both regular `.git` directories and linked-worktree `.git` files, resolving through the git common dir and origin remote URL. This is what makes the bare-remote-repo-name candidate (step 3 above) usable: a worktree checked out under an arbitrary directory name still resolves to the same overlay key as its main checkout.
 
+**Git-dir destinations** — `_resolve_dest()` / `_git_path()` (apply.py) route any destination whose first component is `.git` through `git rev-parse --git-path`, never a plain join: in a linked worktree `.git` is a *file*, so joining raised `NotADirectoryError`, and git itself splits the git dir between the per-worktree gitdir (`HEAD`, `index`) and the shared common dir (`hooks/`, `info/`, `config`). Links resolving outside `dest_root` are recorded absolute in the manifest — `dest_root / <absolute>` returns the absolute path, so manifest consumers are unaffected. `info/exclude` is shared for the same reason, hence the `[<dest_root>]`-labelled block per destination.
+
+**Failure containment** — `_apply_key()` reports and skips per-file `OSError` (source → destination, error type); `_apply_and_record()` wraps the whole per-destination apply in the same net. One unwritable or malformed destination never aborts a sweep over the others.
+
 **Skip on re-entry** — `_already_applied()` (apply.py) checks the manifest before printing. If the destination already has a valid manifest with all symlinks in place, `apply_one` returns silently. Prevents noisy output on every `cd` into an already-applied repo.
 
 **Regular-file guard** — `_apply_key()` skips any destination path that is a regular (non-symlink) file with a warning. It will never silently overwrite a committed project file.

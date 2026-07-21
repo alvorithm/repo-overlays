@@ -398,6 +398,31 @@ main checkout's already-materialised locations, and edit at the overlay source.
 Per-feature folders inside a shared overlay key (e.g. `work/wf-now/feature-scoping/`)
 cover branch-specific docs without per-worktree overlays.
 
+### Git-dir destinations (`dot_git/…`)
+
+An overlay key may carry files destined for the repository's git dir — in practice
+git hooks: `<key>/dot_git/hooks/post-merge` → `<repo>/.git/hooks/post-merge`.
+
+These paths are **not** joined onto the destination; they are resolved with
+`git rev-parse --git-path`, because git splits the git dir in a linked worktree:
+
+| Path | Where it lives in a worktree |
+|---|---|
+| `hooks/`, `info/`, `config` | shared **common dir** (main checkout's `.git/`) |
+| `HEAD`, `index` | per-worktree gitdir (`<main>/.git/worktrees/<name>/`) |
+
+Consequences, all intentional:
+
+- a hook applied from a worktree installs into the main checkout's `.git/hooks`,
+  which is the only place git looks for it — one hook per repository, not per worktree;
+- the manifest records such a link by absolute path, since it lies outside the
+  destination tree;
+- `.git/info/exclude` is shared too, so every destination writes its own
+  `[<dest_root>]`-labelled block into it (a worktree-local `info/exclude` is ignored
+  by git);
+- applying into a directory that is not a git repo skips the `dot_git/` files with a
+  message and materialises everything else.
+
 ## 8. Overriding or supplementing target-repo bundled files
 A project like Penpot ships its own `AGENTS.md` (or `CLAUDE.md`) in the repository root.
 When you have a worktree (`git worktree add …`) you may want to:
