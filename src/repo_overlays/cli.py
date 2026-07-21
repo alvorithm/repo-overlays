@@ -8,9 +8,9 @@ from pathlib import Path
 
 from .apply import apply_all, apply_one
 from .config import TOP_LEVEL_CONFIG, AppConfig, load_config
-from .manifest import MANIFEST_FILENAME, read as read_manifest
+from .manifest import MANIFEST_FILENAME, divergent_markers, read as read_manifest
 from .promote import promote
-from .resolve import iter_all_destinations
+from .resolve import iter_all_destinations, resolve_key_dest
 from .sources import SourceStack
 from .watch import watch
 
@@ -105,9 +105,25 @@ def cmd_config(args: argparse.Namespace) -> int:
 
 
 def cmd_status(args: argparse.Namespace) -> int:
+    """Report broken links, drift and missing partials.
+
+    With a *path*, only that destination is checked and template partials are
+    skipped — cheap enough (a manifest read plus one stat per link) to run from
+    a directory-enter hook.
+    """
     config = _load(args)
+    path = getattr(args, "path", None)
     issues = 0
-    for key, dest_root, is_fixed in iter_all_destinations(config):
+
+    if path:
+        resolved = resolve_key_dest(Path(path).resolve(), config)
+        if resolved is None:
+            return 0
+        destinations = [resolved]
+    else:
+        destinations = list(iter_all_destinations(config))
+
+    for key, dest_root, is_fixed in destinations:
         manifest = read_manifest(dest_root)
         for lr in manifest.links:
             link = dest_root / lr.path
@@ -118,25 +134,25 @@ def cmd_status(args: argparse.Namespace) -> int:
                 print(f"regular-file: {link}")
                 issues += 1
 
-        # Check for divergent markers anywhere in dest_root.
-        for marker in dest_root.rglob(".divergent"):
+        for marker in divergent_markers(dest_root):
             print(f"diverged: {marker.parent}")
             issues += 1
 
-    stack = SourceStack(config)
-    for key in stack.iter_keys():
-        for abs_src, src in stack.iter_files_for_key(key):
-            if abs_src.suffix == ".mo":
-                try:
-                    from .render import _resolve_partials, _PartialLoader
-                    loader = _PartialLoader(stack, src)
-                    template = abs_src.read_text()
-                    _resolve_partials(template, loader)
-                except FileNotFoundError as e:
-                    print(f"missing-partial: {e}")
-                    issues += 1
+    if not path:
+        stack = SourceStack(config)
+        for key in stack.iter_keys():
+            for abs_src, src in stack.iter_files_for_key(key):
+                if abs_src.suffix == ".mo":
+                    try:
+                        from .render import _resolve_partials, _PartialLoader
+                        loader = _PartialLoader(stack, src)
+                        template = abs_src.read_text()
+                        _resolve_partials(template, loader)
+                    except FileNotFoundError as e:
+                        print(f"missing-partial: {e}")
+                        issues += 1
 
-    if issues == 0:
+    if issues == 0 and not path:
         print("All overlays clean.")
     return 0 if issues == 0 else 1
 
@@ -177,6 +193,7 @@ def _build_parser() -> argparse.ArgumentParser:
     cp.set_defaults(func=cmd_config)
 
     sp = sub.add_parser("status", help="Report broken links, drift, missing partials")
+    sp.add_argument("path", nargs="?", help="Limit to the destination containing PATH (fast)")
     sp.set_defaults(func=cmd_status)
 
     return p
