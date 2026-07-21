@@ -72,6 +72,21 @@ def write(dest_root: Path, links: list[LinkRecord]) -> None:
     _manifest_path(dest_root).write_bytes(tomli_w.dumps(data).encode())
 
 
+def divergent_markers(dest_root: Path) -> list[Path]:
+    """Return existing ``.divergent`` markers for *dest_root*.
+
+    Derived from the manifest rather than an ``rglob``: a marker is only ever
+    written next to a live file (render.py), and every live file is a manifest
+    entry, so the candidate set is the parent directories of the recorded
+    links.  Walking the whole destination tree instead costs seconds on large
+    repos and finds nothing extra.
+    """
+    dirs = {dest_root}
+    for lr in read(dest_root).links:
+        dirs.add((dest_root / lr.path).parent)
+    return sorted(d / ".divergent" for d in dirs if (d / ".divergent").exists())
+
+
 def prune(dest_root: Path, current_paths: set[str]) -> list[str]:
     """Remove symlinks no longer in current_paths; return list of pruned rel-paths."""
     manifest = read(dest_root)

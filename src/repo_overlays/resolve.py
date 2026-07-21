@@ -113,11 +113,57 @@ def resolve_key_dest(
     return key, toplevel, False
 
 
+_MAX_SEARCH_DEPTH = 4
+
+
+def _linked_worktrees(toplevel: Path) -> list[Path]:
+    """Return the linked worktrees of the repo at *toplevel* (git's own list).
+
+    Asking git is both exhaustive and O(1) in filesystem work: worktrees are
+    registered in the common dir, so they are found wherever they live — inside
+    the repo, under a watched root, or anywhere else on disk.
+    """
+    result = subprocess.run(
+        ["git", "-C", str(toplevel), "worktree", "list", "--porcelain"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return []
+    return [
+        Path(line[len("worktree ") :].strip())
+        for line in result.stdout.splitlines()
+        if line.startswith("worktree ")
+    ]
+
+
+def _iter_repo_roots(root: Path, depth: int = _MAX_SEARCH_DEPTH) -> Iterator[Path]:
+    """Yield directories under *root* that hold a ``.git`` entry.
+
+    Descent stops at a repository: its worktrees come from
+    :func:`_linked_worktrees`, so there is no reason to walk (potentially
+    enormous) working trees.  This is what keeps discovery off ``node_modules``
+    and friends.
+    """
+    if depth < 0 or not root.is_dir():
+        return
+    try:
+        children = list(root.iterdir())
+    except OSError:
+        return
+    if any(c.name == ".git" for c in children):
+        yield root
+        return
+    for child in children:
+        if child.is_dir() and not child.is_symlink() and not child.name.startswith("."):
+            yield from _iter_repo_roots(child, depth - 1)
+
+
 def iter_all_destinations(config: AppConfig) -> Iterator[tuple[str, Path, bool]]:
     """Yield ``(key, dest_root, is_fixed)`` for every known destination.
 
-    Covers fixed targets + every git repo under watched_roots (depth ≤ 4),
-    including linked worktrees (where ``.git`` is a file).
+    Covers fixed targets + every git repo under watched_roots (depth ≤ 4) and
+    every linked worktree of those repos, wherever it is checked out.
     """
     targets = config.unified_targets
     for key, tpath in targets.items():
@@ -126,24 +172,10 @@ def iter_all_destinations(config: AppConfig) -> Iterator[tuple[str, Path, bool]]
 
     seen_tops: set[Path] = set()
     for root in config.all_watched_roots:
-        if not root.is_dir():
-            continue
-        for git_dir in root.rglob(".git"):
-            # depth cap: count separators relative to root
-            rel = git_dir.relative_to(root)
-            if len(rel.parts) > 5:
-                continue
-            if git_dir.is_dir():
-                toplevel = git_dir.parent
-            elif git_dir.is_file():
-                # Linked worktree: .git is a file containing "gitdir: <path>".
-                toplevel = _git_toplevel(git_dir.parent)
-                if toplevel is None:
+        for repo_root in _iter_repo_roots(root):
+            for toplevel in [repo_root, *_linked_worktrees(repo_root)]:
+                if toplevel in seen_tops or not toplevel.is_dir():
                     continue
-            else:
-                continue
-            if toplevel in seen_tops:
-                continue
-            seen_tops.add(toplevel)
-            key = _resolve_project_key(toplevel, config)
-            yield key, toplevel, False
+                seen_tops.add(toplevel)
+                key = _resolve_project_key(toplevel, config)
+                yield key, toplevel, False
