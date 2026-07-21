@@ -10,7 +10,14 @@ from pathlib import Path
 from typing import Iterator
 
 from .config import AppConfig, SourceConfig
-from .manifest import LinkRecord, prune, read, write
+from .manifest import (
+    MANIFEST_FILENAME,
+    SKIP_FILENAME,
+    LinkRecord,
+    prune,
+    read,
+    write,
+)
 from .render import render_template
 from .resolve import iter_all_destinations, resolve_key_dest
 from .sources import SourceStack
@@ -143,6 +150,12 @@ def _update_git_exclude(dest_root: Path, link_paths: list[str]) -> None:
     exclude_file.parent.mkdir(parents=True, exist_ok=True)
 
     existing = exclude_file.read_text() if exclude_file.exists() else ""
+
+    if not link_paths:
+        # Nothing to exclude: drop this destination's block instead of leaving
+        # an empty one behind (opt-out, or every file skipped).
+        exclude_file.write_text(_merge_exclude_blocks(existing, dest_root, ""))
+        return
 
     marker_start = _marker_start(dest_root)
     lines = [marker_start]
@@ -324,12 +337,39 @@ def apply_one(path: Path, config: AppConfig) -> bool:
     if not sources:
         return False
 
+    if _is_opted_out(dest_root):
+        return _withdraw(dest_root)
+
     # Skip silently if the overlay is already in place (avoids noisy output
     # when cd'ing into subdirectories of an already-applied repo).
     if _already_applied(dest_root, key):
         return True
 
     return _apply_and_record(key, dest_root, is_fixed, stack, config, sources)
+
+
+def _is_opted_out(dest_root: Path) -> bool:
+    """Return True if *dest_root* carries the opt-out marker.
+
+    Every git repo and worktree under a watched root receives its key's overlay
+    by default, including worktrees.  Dropping an empty ``.repo-overlays-skip``
+    file in one excludes it — a per-destination decision, so it fits a worktree
+    (short-lived, not in any config file) better than a config entry would.
+    """
+    return (dest_root / SKIP_FILENAME).exists()
+
+
+def _withdraw(dest_root: Path) -> bool:
+    """Remove every link this tool installed in an opted-out destination."""
+    removed = prune(dest_root, set())
+    manifest_file = dest_root / MANIFEST_FILENAME
+    if removed or manifest_file.exists():
+        print(f"Overlay skipped ({SKIP_FILENAME}) → {_fmt_path(dest_root)}")
+        if removed:
+            print(f"  withdrew: {removed}")
+        manifest_file.unlink(missing_ok=True)
+        _update_git_exclude(dest_root, [])
+    return False
 
 
 def _apply_and_record(
@@ -345,6 +385,9 @@ def _apply_and_record(
     Any OSError is reported and swallowed: one unusable destination (unwritable
     dir, dangling worktree, vanished repo) must never abort the caller's sweep.
     """
+    if _is_opted_out(dest_root):
+        return _withdraw(dest_root)
+
     print(f"Overlay {key} ({', '.join(sources)}) → {_fmt_path(dest_root)}")
     try:
         links = _apply_key(key, dest_root, is_fixed, stack, config)

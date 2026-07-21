@@ -11,6 +11,8 @@ import tomli_w
 
 
 MANIFEST_FILENAME = ".repo-overlays.toml"
+#: Marker file that opts a single destination out of overlays entirely.
+SKIP_FILENAME = ".repo-overlays-skip"
 SCHEMA_VERSION = 1
 
 

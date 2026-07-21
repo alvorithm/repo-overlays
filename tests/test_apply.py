@@ -666,3 +666,50 @@ def test_exclude_adopts_unlabelled_legacy_block(tmp: Path) -> None:
     merged = _merge_exclude_blocks(legacy, dest, new)
     assert "/OLD.md" not in merged
     assert merged.count("/NEW.md") == 1
+
+
+# ── per-destination opt-out ──────────────────────────────────────────────
+
+
+def test_skip_marker_excludes_a_single_destination(tmp: Path) -> None:
+    """A destination carrying .repo-overlays-skip gets no overlay.
+
+    Worktrees receive their repo's overlay by default; the marker is the
+    per-destination opt-out (a worktree is too short-lived for a config entry).
+    """
+    from repo_overlays.manifest import SKIP_FILENAME
+
+    src_dir = make_source(tmp, "personal")
+    project = tmp / "myproject"
+    _git_init(project)
+    (src_dir / "myproject").mkdir()
+    (src_dir / "myproject" / "AGENTS.md").write_text("guidance")
+
+    (project / SKIP_FILENAME).touch()
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+
+    assert apply_one(project, config) is False
+    assert not (project / "AGENTS.md").exists()
+
+
+def test_skip_marker_withdraws_previously_applied_links(tmp: Path) -> None:
+    """Marking an already-applied destination removes what was installed."""
+    from repo_overlays.manifest import SKIP_FILENAME
+
+    src_dir = make_source(tmp, "personal")
+    project = tmp / "myproject"
+    _git_init(project)
+    (src_dir / "myproject").mkdir()
+    (src_dir / "myproject" / "AGENTS.md").write_text("guidance")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+    apply_one(project, config)
+    assert (project / "AGENTS.md").is_symlink()
+
+    (project / SKIP_FILENAME).touch()
+    assert apply_one(project, config) is False
+
+    assert not (project / "AGENTS.md").exists()
+    assert not (project / MANIFEST_FILENAME).exists()
+    exclude = (project / ".git" / "info" / "exclude").read_text()
+    assert "AGENTS.md" not in exclude, "exclude block must go too"
