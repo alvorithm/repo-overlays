@@ -12,6 +12,19 @@ from pathlib import Path
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _isolate_side_effects(
+    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """Keep the suite out of the developer's session and state directory.
+
+    Drift fixtures used to fire real `notify-send` popups and append to the
+    real ~/.local/state/repo-overlays/events.log while the tests ran.
+    """
+    monkeypatch.setenv("REPO_OVERLAYS_NO_NOTIFY", "1")
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path_factory.mktemp("state-")))
+
+
 @pytest.fixture()
 def tmp(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """Return a fresh temp dir under /tmp."""

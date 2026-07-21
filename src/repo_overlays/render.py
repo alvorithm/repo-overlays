@@ -113,6 +113,11 @@ def _notify(path: Path) -> None:
     notification is also appended to a log: "what was that notification?" has
     to be answerable afterwards.
     """
+    if os.environ.get("REPO_OVERLAYS_NO_NOTIFY"):
+        # Test runs (and any batch/CI use) must not raise desktop notifications
+        # on a real session: a drift fixture is not a drift.
+        return
+
     stamp = datetime.now().astimezone().isoformat(timespec="seconds")
     try:
         log = _event_log()

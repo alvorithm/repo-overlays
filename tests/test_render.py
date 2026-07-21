@@ -184,6 +184,7 @@ def test_drift_is_logged_for_later_inspection(tmp: Path, monkeypatch) -> None:
     notification?" answerable minutes later.
     """
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp / "state"))
+    monkeypatch.delenv("REPO_OVERLAYS_NO_NOTIFY", raising=False)
 
     src = make_source(tmp, "personal")
     template = src / "guide.md.mo"
