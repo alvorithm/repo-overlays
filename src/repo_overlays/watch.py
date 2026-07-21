@@ -69,7 +69,10 @@ def watch(config: AppConfig, once: bool = False) -> None:
     watch_paths = _collect_watch_paths(config)
     for path in watch_paths:
         try:
-            inotify.add_watch(str(path), inotify_simple.flags.ALL_EVENTS)
+            # Raw mask, not a library constant: inotify_simple ≥2.0 moved
+            # ALL_EVENTS from `flags` to `masks`, and _WATCH_FLAGS is the
+            # narrower set we actually want anyway.
+            inotify.add_watch(str(path), _WATCH_FLAGS)
         except OSError:
             pass
 
