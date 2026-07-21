@@ -266,16 +266,20 @@ def _apply_key(
         try:
             final_dest.parent.mkdir(parents=True, exist_ok=True)
 
-            if final_dest.exists() and not final_dest.is_symlink():
+            # Test is_symlink() first: a *dangling* symlink (its source moved)
+            # is not exists(), so an exists()-driven branch would try to create
+            # a link over it and raise FileExistsError.  Repointing it is
+            # exactly what an apply after a source move must do.
+            if final_dest.is_symlink():
+                final_dest.unlink()
+            elif final_dest.exists():
                 print(
                     f"  skip: {final_dest} is a regular file (not a symlink); not overwriting",
                     file=sys.stderr,
                 )
                 continue
 
-            final_dest.symlink_to(link_target) if not final_dest.exists() else (
-                final_dest.unlink() or final_dest.symlink_to(link_target)
-            )
+            final_dest.symlink_to(link_target)
         except OSError as e:
             # One unwritable destination must not abort the whole key.
             print(

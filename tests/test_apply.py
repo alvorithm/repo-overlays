@@ -740,3 +740,36 @@ def test_manifest_holds_only_current_links(tmp: Path) -> None:
     paths = {lr.path for lr in read_manifest(project).links}
     assert paths == {"AGENTS.md"}, paths
     assert not (project / "OLD.md").exists()
+
+
+def test_dangling_link_is_repointed_not_dropped(tmp: Path) -> None:
+    """A link whose target moved is repointed, not pruned.
+
+    Regression: the write branch keyed on exists(), which is False for a
+    dangling symlink, so apply raised FileExistsError, skipped the file, and
+    the next prune deleted the link — silently withdrawing overlays from every
+    destination after a source directory was moved.
+    """
+    src_dir = make_source(tmp, "personal")
+    project = tmp / "myproject"
+    _git_init(project)
+    overlay = src_dir / "myproject"
+    overlay.mkdir()
+    (overlay / "AGENTS.md").write_text("guidance")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+    apply_one(project, config)
+    link = project / "AGENTS.md"
+    assert link.is_symlink()
+
+    # Simulate the source having moved: same link, target now absent.
+    link.unlink()
+    link.symlink_to(tmp / "gone" / "AGENTS.md")
+    assert link.is_symlink() and not link.exists()
+
+    apply_one(project, config)
+
+    assert link.is_symlink(), "link must survive"
+    assert link.resolve() == (overlay / "AGENTS.md").resolve()
+    assert link.read_text() == "guidance"
+    assert {lr.path for lr in read_manifest(project).links} == {"AGENTS.md"}
