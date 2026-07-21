@@ -713,3 +713,30 @@ def test_skip_marker_withdraws_previously_applied_links(tmp: Path) -> None:
     assert not (project / MANIFEST_FILENAME).exists()
     exclude = (project / ".git" / "info" / "exclude").read_text()
     assert "AGENTS.md" not in exclude, "exclude block must go too"
+
+
+def test_manifest_holds_only_current_links(tmp: Path) -> None:
+    """Re-applying after a source file is removed leaves no record behind.
+
+    Regression: the manifest was rewritten as (previous ∪ current), so pruned
+    links kept their record forever and manifests accumulated entries pointing
+    at files that no longer existed.
+    """
+    src_dir = make_source(tmp, "personal")
+    project = tmp / "myproject"
+    _git_init(project)
+    overlay = src_dir / "myproject"
+    overlay.mkdir()
+    (overlay / "AGENTS.md").write_text("guidance")
+    (overlay / "OLD.md").write_text("obsolete")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+    apply_one(project, config)
+    assert {lr.path for lr in read_manifest(project).links} == {"AGENTS.md", "OLD.md"}
+
+    (overlay / "OLD.md").unlink()
+    apply_one(project, config)
+
+    paths = {lr.path for lr in read_manifest(project).links}
+    assert paths == {"AGENTS.md"}, paths
+    assert not (project / "OLD.md").exists()

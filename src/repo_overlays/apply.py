@@ -393,15 +393,14 @@ def _apply_and_record(
         links = _apply_key(key, dest_root, is_fixed, stack, config)
         current_paths = {lr.path for lr in links}
 
-        # Merge with existing manifest, prune removed links.
-        existing = read(dest_root)
-        merged = {lr.path: lr for lr in existing.links}
-        for lr in links:
-            merged[lr.path] = lr
+        # Remove links that are no longer produced, then record exactly what
+        # this run installed.  Merging the previous manifest in would undo the
+        # prune on paper: the symlink goes but its record stays forever, and
+        # the manifest slowly fills with entries pointing at deleted files.
         pruned = prune(dest_root, current_paths)
         if pruned:
             print(f"  pruned: {pruned}")
-        write(dest_root, list(merged.values()))
+        write(dest_root, links)
         _update_git_exclude(dest_root, list(current_paths))
     except OSError as e:
         print(f"  error: {_fmt_path(dest_root)}: {type(e).__name__}: {e}", file=sys.stderr)
