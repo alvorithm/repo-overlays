@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Iterator
@@ -16,8 +17,19 @@ from .sources import SourceStack
 
 _HOME = Path.home()
 
-_MARKER_START = "# ── repo-overlays (auto-managed, do not edit between markers) ──"
+_MARKER_PREFIX = "# ── repo-overlays (auto-managed, do not edit between markers)"
+_MARKER_LEGACY = f"{_MARKER_PREFIX} ──"
 _MARKER_END = "# ── end repo-overlays ──"
+
+
+def _marker_start(dest_root: Path) -> str:
+    """Block header for *dest_root*.
+
+    Linked worktrees share one ``info/exclude`` with the main checkout (git
+    resolves ``info/`` to the common dir), so each destination labels its own
+    block; otherwise the last apply would clobber the other's entries.
+    """
+    return f"{_MARKER_PREFIX} [{dest_root}] ──"
 
 
 def _fmt_path(p: Path) -> str:
@@ -48,22 +60,60 @@ def _rendered_dir(source: SourceConfig, key: str) -> Path:
     return source.path / "_rendered" / key
 
 
-def _git_info_exclude(dest_root: Path) -> Path | None:
-    """Return the path to ``.git/info/exclude`` for *dest_root*, or None.
+def _git_path(dest_root: Path, rel: str) -> Path | None:
+    """Return the real filesystem path of ``.git/<rel>`` for *dest_root*, or None.
 
-    Handles linked worktrees (where ``.git`` is a file containing
-    ``gitdir: …``) transparently.
+    Delegates to ``git rev-parse --git-path``, which is the only correct way to
+    map a git-dir-relative path in the presence of linked worktrees: there
+    ``.git`` is a *file*, and git splits its contents between the per-worktree
+    gitdir (``HEAD``, ``index``) and the shared common dir (``hooks/``,
+    ``info/``, ``config``).  Naive ``dest_root / ".git" / rel`` raises
+    NotADirectoryError in a worktree and would write to the wrong place in the
+    cases where it does not.  Returns None when *dest_root* is not a git repo.
     """
-    git_path = dest_root / ".git"
-    if git_path.is_file():
-        content = git_path.read_text().strip()
-        if content.startswith("gitdir: "):
-            worktree_gitdir = Path(content[8:].strip())
-            return worktree_gitdir / "info" / "exclude"
+    result = subprocess.run(
+        ["git", "-C", str(dest_root), "rev-parse", "--git-path", rel],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
         return None
-    if git_path.is_dir():
-        return git_path / "info" / "exclude"
-    return None
+    p = Path(result.stdout.strip())
+    return p if p.is_absolute() else dest_root / p
+
+
+def _resolve_dest(dest_root: Path, dest_rel: Path) -> Path | None:
+    """Map an overlay-relative destination to its real path under *dest_root*.
+
+    Destinations inside ``.git/`` (e.g. ``dot_git/hooks/post-merge``) go
+    through :func:`_git_path`; everything else is a plain join.  Returns None
+    for a ``.git/`` destination in a non-git directory.
+    """
+    if dest_rel.parts and dest_rel.parts[0] == ".git":
+        rest = Path(*dest_rel.parts[1:])
+        if not rest.parts:
+            return None
+        return _git_path(dest_root, str(rest))
+    return dest_root / dest_rel
+
+
+def _git_info_exclude(dest_root: Path) -> Path | None:
+    """Return the path to ``.git/info/exclude`` for *dest_root*, or None."""
+    return _git_path(dest_root, "info/exclude")
+
+
+def _record_path(dest_root: Path, final_dest: Path) -> str:
+    """Manifest path for *final_dest*: relative to dest_root, else absolute.
+
+    Git-dir destinations of a linked worktree resolve outside *dest_root*
+    (into the main checkout's ``.git``), so they are recorded absolute.
+    ``dest_root / <absolute>`` yields the absolute path, so every consumer of
+    ``LinkRecord.path`` keeps working unchanged.
+    """
+    try:
+        return str(final_dest.relative_to(dest_root))
+    except ValueError:
+        return str(final_dest)
 
 
 def _update_git_exclude(dest_root: Path, link_paths: list[str]) -> None:
@@ -76,19 +126,31 @@ def _update_git_exclude(dest_root: Path, link_paths: list[str]) -> None:
     if exclude_file is None:
         return
 
+    # Git never tracks anything inside the git dir, and absolute records live
+    # outside the worktree: neither belongs in info/exclude.
+    link_paths = [
+        p for p in link_paths if not os.path.isabs(p) and not p.startswith(".git" + os.sep)
+    ]
+
     exclude_file.parent.mkdir(parents=True, exist_ok=True)
 
     existing = exclude_file.read_text() if exclude_file.exists() else ""
 
-    lines = [_MARKER_START]
+    marker_start = _marker_start(dest_root)
+    lines = [marker_start]
     for p in sorted(link_paths):
         lines.append(f"/{p}")
     lines.append(_MARKER_END)
     new_section = "\n".join(lines) + "\n"
 
-    if _MARKER_START in existing:
-        start = existing.index(_MARKER_START)
-        end = existing.index(_MARKER_END) + len(_MARKER_END)
+    # Replace this destination's block; adopt a pre-label block if present.
+    header = next(
+        (h for h in (marker_start, _MARKER_LEGACY) if h in existing),
+        None,
+    )
+    if header is not None:
+        start = existing.index(header)
+        end = existing.index(_MARKER_END, start) + len(_MARKER_END)
         while end < len(existing) and existing[end] == "\n":
             end += 1
         updated = existing[:start] + new_section + existing[end:]
@@ -124,7 +186,14 @@ def _apply_key(
             rendered_dir = _rendered_dir(src, key)
             rendered_dest = rendered_dir / rel.with_suffix("")
             live_dest_rel = dest_rel.with_suffix("")
-            live_dest = dest_root / live_dest_rel
+            live_dest = _resolve_dest(dest_root, live_dest_rel)
+            if live_dest is None:
+                print(
+                    f"  skip: {live_dest_rel} targets the git dir of "
+                    f"{_fmt_path(dest_root)}, which is not a git repo",
+                    file=sys.stderr,
+                )
+                continue
 
             status = render_template(
                 src=abs_src,
@@ -143,25 +212,41 @@ def _apply_key(
             final_dest = live_dest
         else:
             link_target = abs_src
-            final_dest = dest_root / dest_rel
+            resolved = _resolve_dest(dest_root, dest_rel)
+            if resolved is None:
+                print(
+                    f"  skip: {dest_rel} targets the git dir of "
+                    f"{_fmt_path(dest_root)}, which is not a git repo",
+                    file=sys.stderr,
+                )
+                continue
+            final_dest = resolved
 
-        final_dest.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            final_dest.parent.mkdir(parents=True, exist_ok=True)
 
-        if final_dest.exists() and not final_dest.is_symlink():
+            if final_dest.exists() and not final_dest.is_symlink():
+                print(
+                    f"  skip: {final_dest} is a regular file (not a symlink); not overwriting",
+                    file=sys.stderr,
+                )
+                continue
+
+            final_dest.symlink_to(link_target) if not final_dest.exists() else (
+                final_dest.unlink() or final_dest.symlink_to(link_target)
+            )
+        except OSError as e:
+            # One unwritable destination must not abort the whole key.
             print(
-                f"  skip: {final_dest} is a regular file (not a symlink); not overwriting",
+                f"  error: {_fmt_path(abs_src)} → {_fmt_path(final_dest)}: "
+                f"{type(e).__name__}: {e}",
                 file=sys.stderr,
             )
             continue
 
-        final_dest.symlink_to(link_target) if not final_dest.exists() else (
-            final_dest.unlink() or final_dest.symlink_to(link_target)
-        )
-
-        rel_str = str(dest_rel.with_suffix("") if is_template else dest_rel)
         links.append(
             LinkRecord(
-                path=rel_str,
+                path=_record_path(dest_root, final_dest),
                 source=src.name,
                 key=key,
                 target=str(link_target),
@@ -216,24 +301,40 @@ def apply_one(path: Path, config: AppConfig) -> bool:
     if _already_applied(dest_root, key):
         return True
 
+    return _apply_and_record(key, dest_root, is_fixed, stack, config, sources)
+
+
+def _apply_and_record(
+    key: str,
+    dest_root: Path,
+    is_fixed: bool,
+    stack: SourceStack,
+    config: AppConfig,
+    sources: list[str],
+) -> bool:
+    """Apply one key to one destination, update its manifest and git exclude.
+
+    Any OSError is reported and swallowed: one unusable destination (unwritable
+    dir, dangling worktree, vanished repo) must never abort the caller's sweep.
+    """
     print(f"Overlay {key} ({', '.join(sources)}) → {_fmt_path(dest_root)}")
     try:
         links = _apply_key(key, dest_root, is_fixed, stack, config)
-    except FileNotFoundError as e:
-        print(f"  error: {e}", file=sys.stderr)
-        return False
-    current_paths = {lr.path for lr in links}
+        current_paths = {lr.path for lr in links}
 
-    # Merge with existing manifest, prune removed links.
-    existing = read(dest_root)
-    merged = {lr.path: lr for lr in existing.links}
-    for lr in links:
-        merged[lr.path] = lr
-    pruned = prune(dest_root, current_paths)
-    if pruned:
-        print(f"  pruned: {pruned}")
-    write(dest_root, list(merged.values()))
-    _update_git_exclude(dest_root, list(current_paths))
+        # Merge with existing manifest, prune removed links.
+        existing = read(dest_root)
+        merged = {lr.path: lr for lr in existing.links}
+        for lr in links:
+            merged[lr.path] = lr
+        pruned = prune(dest_root, current_paths)
+        if pruned:
+            print(f"  pruned: {pruned}")
+        write(dest_root, list(merged.values()))
+        _update_git_exclude(dest_root, list(current_paths))
+    except OSError as e:
+        print(f"  error: {_fmt_path(dest_root)}: {type(e).__name__}: {e}", file=sys.stderr)
+        return False
     return True
 
 
@@ -244,19 +345,4 @@ def apply_all(config: AppConfig) -> None:
         sources = _contributing_sources(key, config)
         if not sources:
             continue
-        print(f"Overlay {key} ({', '.join(sources)}) → {_fmt_path(dest_root)}")
-        try:
-            links = _apply_key(key, dest_root, is_fixed, stack, config)
-        except FileNotFoundError as e:
-            print(f"  error: {e}", file=sys.stderr)
-            continue
-        current_paths = {lr.path for lr in links}
-        existing = read(dest_root)
-        merged = {lr.path: lr for lr in existing.links}
-        for lr in links:
-            merged[lr.path] = lr
-        pruned = prune(dest_root, current_paths)
-        if pruned:
-            print(f"  pruned: {pruned}")
-        write(dest_root, list(merged.values()))
-        _update_git_exclude(dest_root, list(current_paths))
+        _apply_and_record(key, dest_root, is_fixed, stack, config, sources)

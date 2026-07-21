@@ -13,6 +13,7 @@ Features covered (USAGE.md §3, §4, §5, §6, §7):
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -492,3 +493,134 @@ def test_list_outputs_home_relative_paths(tmp: Path, capsys: pytest.CaptureFixtu
     # Fixed targets keep dot_ prefix verbatim (no dot_ rewrite).
     assert f"{fixed_dest}/dot_secret/key.md" in lines,\
         f"missing dot_secret/key.md in {lines}"
+
+
+# ── git-dir destinations (dot_git/…) and linked worktrees ────────────────
+
+
+def _commit_empty(path: Path) -> None:
+    subprocess.run(["git", "-C", str(path), "commit", "-q", "--allow-empty", "-m", "init"],
+                   check=True, capture_output=True,
+                   env={**os.environ,
+                        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+                        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"})
+
+
+def test_git_dir_overlay_lands_in_hooks(tmp: Path) -> None:
+    """dot_git/hooks/<hook> materialises into the real .git/hooks of a normal checkout."""
+    src_dir = make_source(tmp, "personal")
+    project = tmp / "myproject"
+    _git_init(project)
+
+    hook_src = src_dir / "myproject" / "dot_git" / "hooks" / "post-merge"
+    hook_src.parent.mkdir(parents=True)
+    hook_src.write_text("#!/bin/sh\nexit 0\n")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+    apply_one(project, config)
+
+    hook = project / ".git" / "hooks" / "post-merge"
+    assert hook.is_symlink()
+    assert hook.resolve() == hook_src.resolve()
+
+    # Git-dir paths are never tracked, so they must not reach info/exclude.
+    exclude = (project / ".git" / "info" / "exclude").read_text()
+    assert "hooks/post-merge" not in exclude
+
+
+def test_git_dir_overlay_in_linked_worktree(tmp: Path) -> None:
+    """In a linked worktree (.git is a file) hooks resolve to the shared common dir.
+
+    Regression: `dest_root/".git"/…` raised NotADirectoryError and aborted apply
+    for every remaining key.
+    """
+    src_dir = make_source(tmp, "personal")
+    project = tmp / "myproject"
+    _git_init(project)
+    subprocess.run(
+        ["git", "-C", str(project), "remote", "add", "origin",
+         "git@github.com:acme/myproject.git"],
+        check=True, capture_output=True,
+    )
+    _commit_empty(project)
+
+    # Directory name ≠ repo name: resolution goes through the shared origin.
+    worktree = tmp / "Worktrees" / "myproject-feature"
+    subprocess.run(["git", "-C", str(project), "worktree", "add", "-q",
+                    "-b", "feature", str(worktree)],
+                   check=True, capture_output=True)
+    assert (worktree / ".git").is_file(), "expected a linked worktree"
+
+    overlay = src_dir / "myproject"
+    (overlay / "dot_git" / "hooks").mkdir(parents=True)
+    (overlay / "dot_git" / "hooks" / "post-merge").write_text("#!/bin/sh\nexit 0\n")
+    (overlay / "AGENTS.md").write_text("project guidance")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+    assert apply_one(worktree, config) is True
+
+    # Ordinary files still land in the worktree …
+    assert (worktree / "AGENTS.md").is_symlink()
+    # … and the hook lands in the shared git dir, not under the .git file.
+    hook = project / ".git" / "hooks" / "post-merge"
+    assert hook.is_symlink()
+    assert hook.resolve() == (overlay / "dot_git" / "hooks" / "post-merge").resolve()
+
+    # Manifest records the out-of-worktree link absolutely, and re-apply is a no-op.
+    manifest = read_manifest(worktree)
+    paths = {lr.path for lr in manifest.links}
+    assert str(hook) in paths, paths
+    assert apply_one(worktree, config) is True
+
+
+def test_worktree_and_main_keep_separate_exclude_blocks(tmp: Path) -> None:
+    """Worktree and main checkout share info/exclude; each owns a labelled block.
+
+    Git resolves ``info/`` to the common dir, so an unlabelled block would be
+    overwritten by whichever destination applied last.
+    """
+    src_dir = make_source(tmp, "personal")
+    project = tmp / "myproject"
+    _git_init(project)
+    subprocess.run(
+        ["git", "-C", str(project), "remote", "add", "origin",
+         "git@github.com:acme/myproject.git"],
+        check=True, capture_output=True,
+    )
+    _commit_empty(project)
+    worktree = tmp / "Worktrees" / "myproject-feature"
+    subprocess.run(["git", "-C", str(project), "worktree", "add", "-q",
+                    "-b", "feature", str(worktree)],
+                   check=True, capture_output=True)
+
+    overlay = src_dir / "myproject"
+    overlay.mkdir()
+    (overlay / "AGENTS.md").write_text("project guidance")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+    apply_one(project, config)
+    apply_one(worktree, config)
+
+    exclude = (project / ".git" / "info" / "exclude").read_text()
+    assert f"[{project}]" in exclude
+    assert f"[{worktree}]" in exclude
+    assert exclude.count("/AGENTS.md") == 2
+
+
+def test_git_dir_overlay_skipped_outside_git_repo(tmp: Path) -> None:
+    """A dot_git/ destination in a non-git target is skipped, other files still apply."""
+    fixed_dest = tmp / "config" / "myapp"
+    fixed_dest.mkdir(parents=True)
+    src_dir = make_source(tmp, "personal", targets={"_myapp": str(fixed_dest)})
+    (src_dir / "_myapp" / ".git" / "hooks").mkdir(parents=True)
+    (src_dir / "_myapp" / ".git" / "hooks" / "post-merge").write_text("x")
+    (src_dir / "_myapp" / "CONFIG.md").write_text("app config")
+
+    config = _config(SourceConfig(
+        name="personal", path=src_dir, private=True,
+        targets={"_myapp": fixed_dest},
+    ))
+    apply_one(fixed_dest, config)
+
+    assert (fixed_dest / "CONFIG.md").is_symlink()
+    assert not (fixed_dest / ".git" / "hooks" / "post-merge").exists()
