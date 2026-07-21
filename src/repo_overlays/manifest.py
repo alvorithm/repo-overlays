@@ -97,6 +97,22 @@ def divergent_markers(dest_root: Path) -> list[Path]:
     return sorted(d / ".divergent" for d in dirs if (d / ".divergent").exists())
 
 
+def _prune_empty_dirs(dest_root: Path, link: Path) -> None:
+    """Remove directories left empty by a pruned link, up to *dest_root*.
+
+    A renamed or removed subtree (a skill directory, say) otherwise leaves its
+    empty parents behind forever, and a leftover `skills/<name>/` still looks
+    like a skill to the harnesses that scan that directory.
+    """
+    parent = link.parent
+    while parent != dest_root and dest_root in parent.parents:
+        try:
+            parent.rmdir()
+        except OSError:
+            return
+        parent = parent.parent
+
+
 def prune(dest_root: Path, current_paths: set[str]) -> list[str]:
     """Remove symlinks no longer in current_paths; return list of pruned rel-paths."""
     manifest = read(dest_root)
@@ -109,6 +125,7 @@ def prune(dest_root: Path, current_paths: set[str]) -> list[str]:
             link = dest_root / lr.path
             if link.is_symlink():
                 link.unlink()
+                _prune_empty_dirs(dest_root, link)
                 pruned.append(lr.path)
     write(dest_root, kept, manifest.drift)
     return pruned

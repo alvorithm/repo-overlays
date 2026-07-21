@@ -104,3 +104,28 @@ def test_manifest_contains_schema_and_updated(tmp: Path) -> None:
     content = (dest / MANIFEST_FILENAME).read_text()
     assert "schema" in content
     assert "updated" in content
+
+
+def test_prune_removes_directories_left_empty(tmp: Path) -> None:
+    """A pruned link takes its now-empty parent directories with it.
+
+    A renamed skill otherwise leaves `skills/<old-name>/` behind, which still
+    reads as a skill to every harness that scans that directory.
+    """
+    from repo_overlays.manifest import LinkRecord, prune, write
+
+    dest = tmp / "dest"
+    (dest / "skills" / "documenting").mkdir(parents=True)
+    link = dest / "skills" / "documenting" / "SKILL.md"
+    target = tmp / "src" / "SKILL.md"
+    target.parent.mkdir(parents=True)
+    target.write_text("skill")
+    link.symlink_to(target)
+    (dest / "skills" / "kept").mkdir()          # sibling: `skills/` must survive
+    (dest / "skills" / "kept" / "SKILL.md").symlink_to(target)
+    write(dest, [LinkRecord(path="skills/documenting/SKILL.md", source="s", key="_claude",
+                            target=str(target))])
+
+    assert prune(dest, set()) == ["skills/documenting/SKILL.md"]
+    assert not (dest / "skills" / "documenting").exists(), "empty skill dir must go"
+    assert (dest / "skills").exists(), "shared parent that still has siblings stays"
