@@ -159,13 +159,17 @@ def test_cross_source_override_is_reported(tmp: Path, capsys: pytest.CaptureFixt
     assert "memory replaces guidance" in err
 
 
-def test_editor_backups_are_not_materialised(tmp: Path) -> None:
-    """`settings.json~` and friends never become live files."""
+def test_editor_backups_and_caches_are_not_materialised(tmp: Path) -> None:
+    """`settings.json~`, tool caches and friends never become live files."""
     src = make_source(tmp, "personal")
     (src / "penpot" / "dot_claude").mkdir(parents=True)
     (src / "penpot" / "dot_claude" / "settings.json").write_text("{}")
     (src / "penpot" / "dot_claude" / "settings.json~").write_text("{}")
     (src / "penpot" / "notes.md.swp").write_text("junk")
+    (src / "penpot" / "__pycache__").mkdir()
+    (src / "penpot" / "__pycache__" / "curate.cpython-313.pyc").write_text("bytecode")
+    (src / "penpot" / ".ruff_cache").mkdir()
+    (src / "penpot" / ".ruff_cache" / "CACHEDIR.TAG").write_text("x")
 
     stack = SourceStack(AppConfig(sources=[SourceConfig(name="personal", path=src)]))
     names = {p.name for p, _ in stack.iter_files_for_key("penpot")}

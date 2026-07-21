@@ -15,10 +15,16 @@ _NAMED_PARTIAL_RE = re.compile(r"^@(?P<name>[^/]+)/(?P<rest>.+)$")
 #: Editor leftovers. Materialising `settings.json~` next to `settings.json`
 #: puts junk in the destination repo and can confuse the reading application.
 _BACKUP_SUFFIXES = ("~", ".swp", ".swo", ".orig", ".rej")
+#: Tool caches that live inside a source tree. A skill directory carrying a
+#: `__pycache__` had its .pyc files symlinked into ~/.config/claude/skills/.
+_JUNK_DIRS = frozenset({"__pycache__", ".ruff_cache", ".pytest_cache", ".mypy_cache", ".git"})
 
 
-def _is_editor_backup(name: str) -> bool:
-    return name.endswith(_BACKUP_SUFFIXES) or (name.startswith(".#"))
+def _is_junk(rel: Path) -> bool:
+    """True for editor leftovers and tool caches, which never materialise."""
+    if rel.name.endswith(_BACKUP_SUFFIXES) or rel.name.startswith(".#"):
+        return True
+    return any(part in _JUNK_DIRS for part in rel.parts)
 
 
 class SourceStack:
@@ -66,9 +72,11 @@ class SourceStack:
             if not key_dir.is_dir():
                 continue
             for abs_path in key_dir.rglob("*"):
-                if not abs_path.is_file() or _is_editor_backup(abs_path.name):
+                if not abs_path.is_file():
                     continue
                 rel = abs_path.relative_to(key_dir)
+                if _is_junk(rel):
+                    continue
                 if rel in merged:
                     loser = merged[rel][1]
                     print(
