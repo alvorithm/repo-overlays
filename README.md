@@ -65,6 +65,7 @@ Notes on the harnesses (context for why the targets look the way they do):
 | **template** | A `*.mo` file. Rendered via Mustache (partials resolved across the whole source stack) into `_rendered/<key>/<path>`. |
 | **materialise** | The act of writing `_rendered/` output and placing a symlink at the destination. |
 | **live file** | The symlink at the destination that the agent reads or writes. |
+| **owned directory** | A source directory carrying an empty `.overlay-own` marker: wholly overlay-owned, so the destination excludes the *directory* (`/work/`) instead of each file under it. Keeps new files in the tree from ever being visible to git — see [USAGE.md §9.2](docs/USAGE.md). |
 | **drift** | A live file whose content no longer matches a fresh render of its template — i.e. an agent has edited it since the last apply. |
 | **reconcile** | The interactive step (`repo-overlay promote`) that resolves drift: diff, accept the new render, keep the agent's edit, or edit the source. |
 | **watched_roots** | Parent directories whose git-repo children are auto-discovered as destinations and re-applied when any source changes. |

@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from .apply import apply_all, apply_one
+from .apply import apply_all, apply_one, tracked_links
 from .config import TOP_LEVEL_CONFIG, AppConfig, load_config
 from .manifest import MANIFEST_FILENAME, divergent_markers, read as read_manifest
 from .promote import promote
@@ -133,6 +133,12 @@ def cmd_status(args: argparse.Namespace) -> int:
             elif link.exists() and not link.is_symlink():
                 print(f"regular-file: {link}")
                 issues += 1
+
+        # A tracked overlay link is a one-way trap: info/exclude only hides
+        # untracked paths, so it stays tracked until untracked by hand.
+        for rel in tracked_links(dest_root, [lr.path for lr in manifest.links]):
+            print(f"tracked: {dest_root / rel} — git -C {dest_root} rm --cached {rel}")
+            issues += 1
 
         for marker in divergent_markers(dest_root):
             print(f"diverged: {marker.parent}")

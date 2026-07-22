@@ -574,6 +574,51 @@ This is:
 
 No manual `.gitignore` edits are needed for overlay-managed files.
 
+#### Whole directories: `.overlay-own`
+
+Per-file entries leak when an overlay key owns a *tree*. A file materialised —
+or written straight into the tree by an agent — is visible to git until its
+exclude line exists, and a single `git add -A` in that window tracks it
+**forever**: `info/exclude` only suppresses *untracked* paths.
+
+Drop an empty `.overlay-own` file in a source directory to declare that tree
+wholly overlay-owned:
+
+```
+~/Overlays/beadpot-docs/beadpot/work/.overlay-own
+```
+
+The destination then gets one directory entry instead of one line per file:
+
+```
+/work/                     ← replaces 44 per-file entries
+/AGENTS.md
+/src/beadpot/graph/AGENTS.md
+```
+
+- Git does not descend into the directory at all, so *anything* appearing
+  there is silent — overlay-managed or not. That is the point: the tree is
+  scratch space for agent working notes, not repo content.
+- To track one file from such a tree anyway, `git add -f <path>`.
+- The marker is a declaration, never materialised, and never inferred from the
+  destination's contents — otherwise the granularity would flip back to
+  per-file the moment an agent dropped a file in, which is exactly when the
+  coarse form is needed.
+- A directory git **already** tracks something under is left per-file, with a
+  warning: blanket-excluding it would hide the tracked file's untracked
+  neighbours while the tracked file stays tracked regardless.
+- A marker at the key root is refused — it would exclude the whole project.
+
+`repo-overlay status` reports the trap directly, per destination:
+
+```
+tracked: ~/Code/beadpot/work/…/REPORT.md — git -C ~/Code/beadpot rm --cached work/…/REPORT.md
+```
+
+Nothing else surfaces this: a staged overlay symlink looks like any other
+staged addition in `git status`, and it carries an absolute path into your home
+directory that no other clone can resolve.
+
 ### 9.3 Setting up a new overlayed repo
 
 1. Add the overlay key directory in your overlay source (e.g.

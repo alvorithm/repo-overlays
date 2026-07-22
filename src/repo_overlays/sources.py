@@ -19,9 +19,16 @@ _BACKUP_SUFFIXES = ("~", ".swp", ".swo", ".orig", ".rej")
 #: `__pycache__` had its .pyc files symlinked into ~/.config/claude/skills/.
 _JUNK_DIRS = frozenset({"__pycache__", ".ruff_cache", ".pytest_cache", ".mypy_cache", ".git"})
 
+#: Marker file declaring the directory it sits in wholly overlay-owned, so the
+#: destination excludes that *directory* instead of each file under it. It is a
+#: declaration, never materialised.
+OWN_MARKER = ".overlay-own"
+
 
 def _is_junk(rel: Path) -> bool:
-    """True for editor leftovers and tool caches, which never materialise."""
+    """True for editor leftovers, tool caches and markers, which never materialise."""
+    if rel.name == OWN_MARKER:
+        return True
     if rel.name.endswith(_BACKUP_SUFFIXES) or rel.name.startswith(".#"):
         return True
     return any(part in _JUNK_DIRS for part in rel.parts)
@@ -86,6 +93,30 @@ class SourceStack:
                     )
                 merged[rel] = (abs_path, src)
         yield from ((abs_path, src) for abs_path, src in merged.values())
+
+    def owned_dirs_for_key(self, key: str) -> set[Path]:
+        """Return key-relative directories declared wholly overlay-owned.
+
+        A directory carrying an ``.overlay-own`` marker is excluded at the
+        destination as a directory (``/work/``) rather than file by file.  The
+        per-file form leaks: a file materialised (or written by an agent)
+        before its exclude line exists is briefly visible to git, and one
+        ``git add -A`` in that window tracks it forever — ``info/exclude``
+        cannot hide a tracked path.  Declared here rather than inferred from
+        the destination, so the exclusion does not flip granularity as files
+        come and go.
+        """
+        owned: set[Path] = set()
+        for src in self._config.sources:
+            if key in src.ignore_keys:
+                continue
+            key_dir = src.path / key
+            if not key_dir.is_dir():
+                continue
+            for marker in key_dir.rglob(OWN_MARKER):
+                if marker.is_file():
+                    owned.add(marker.parent.relative_to(key_dir))
+        return owned
 
     def resolve_partial(
         self,

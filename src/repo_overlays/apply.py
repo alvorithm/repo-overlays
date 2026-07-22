@@ -7,7 +7,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Iterator
+from typing import Iterable, Iterator
 
 from .config import AppConfig, SourceConfig
 from .manifest import (
@@ -131,39 +131,101 @@ def _record_path(dest_root: Path, final_dest: Path) -> str:
         return str(final_dest)
 
 
-def _update_git_exclude(dest_root: Path, link_paths: list[str]) -> None:
-    """Add overlay link paths to ``.git/info/exclude``, idempotently.
+def tracked_links(dest_root: Path, paths: Iterable[str]) -> list[str]:
+    """Return the destination-relative *paths* that git already tracks.
 
-    Writes a marked section so repeated calls replace the block rather than
-    duplicating entries.  No-op when *dest_root* is not inside a git repo.
+    ``info/exclude`` only suppresses *untracked* paths, so an overlay symlink
+    staged once — a ``git add -A`` in the window before its exclude line was
+    written — stays tracked forever and gets committed into the project, with
+    an absolute target no other machine can resolve.  The condition is
+    invisible in `git status` (the file looks like any staged addition), hence
+    this check.  Fix: ``git rm --cached``.
     """
-    exclude_file = _git_info_exclude(dest_root)
-    if exclude_file is None:
-        return
+    rel = [p for p in paths if not os.path.isabs(p) and not p.startswith(".git" + os.sep)]
+    if not rel:
+        return []
+    result = subprocess.run(
+        ["git", "-C", str(dest_root), "ls-files", "-z", "--", *rel],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return []
+    return sorted(p for p in result.stdout.split("\0") if p)
 
+
+def _collapsible_dirs(dest_root: Path, owned_dirs: list[str], warn: bool) -> list[str]:
+    """Return the owned dirs that may be excluded wholesale, warning about the rest.
+
+    A directory git already tracks something under is left per-file: blanket-
+    excluding it would hide the neighbours of a tracked file, and the tracked
+    file itself would stay tracked regardless — the marker cannot do what it
+    promises there, so say so instead of pretending.  *warn* is off when the
+    caller only wants to know what the block should look like.
+    """
+    if not owned_dirs:
+        return []
+    tracked = tracked_links(dest_root, owned_dirs)
+    blocked: dict[str, int] = {}
+    for path in tracked:
+        for d in owned_dirs:
+            if path == d or path.startswith(d + "/"):
+                blocked[d] = blocked.get(d, 0) + 1
+    if warn:
+        for d, n in sorted(blocked.items()):
+            print(
+                f"  own-marker: {d}/ kept per-file — git tracks {n} path(s) there "
+                f"(git -C {_fmt_path(dest_root)} rm --cached them to collapse it)",
+                file=sys.stderr,
+            )
+    return sorted(d for d in owned_dirs if d not in blocked)
+
+
+def _exclude_section(
+    dest_root: Path,
+    link_paths: list[str],
+    owned_dirs: list[str],
+    warn: bool = True,
+) -> str:
+    """Return the marked block *dest_root* should carry, or "" for no block.
+
+    Directories declared overlay-owned (``.overlay-own``) contribute one
+    ``/<dir>/`` entry that supersedes every link under them.
+    """
     # Git never tracks anything inside the git dir, and absolute records live
     # outside the worktree: neither belongs in info/exclude.
     link_paths = [
         p for p in link_paths if not os.path.isabs(p) and not p.startswith(".git" + os.sep)
     ]
 
-    exclude_file.parent.mkdir(parents=True, exist_ok=True)
+    owned = _collapsible_dirs(dest_root, owned_dirs, warn)
+    entries = [f"/{d}/" for d in owned]
+    entries += [
+        f"/{p}" for p in link_paths if not any(p.startswith(d + os.sep) for d in owned)
+    ]
+    if not entries:
+        return ""
+    return "\n".join([_marker_start(dest_root), *sorted(entries), _MARKER_END]) + "\n"
 
-    existing = exclude_file.read_text() if exclude_file.exists() else ""
 
-    if not link_paths:
-        # Nothing to exclude: drop this destination's block instead of leaving
-        # an empty one behind (opt-out, or every file skipped).
-        exclude_file.write_text(_merge_exclude_blocks(existing, dest_root, ""))
+def _update_git_exclude(
+    dest_root: Path,
+    link_paths: list[str],
+    owned_dirs: list[str] | None = None,
+) -> None:
+    """Write this destination's block into ``.git/info/exclude``, idempotently.
+
+    Repeated calls replace the block rather than duplicating entries.  An empty
+    block is dropped instead of left behind (opt-out, or every file skipped).
+    No-op when *dest_root* is not inside a git repo.
+    """
+    exclude_file = _git_info_exclude(dest_root)
+    if exclude_file is None:
         return
 
-    marker_start = _marker_start(dest_root)
-    lines = [marker_start]
-    for p in sorted(link_paths):
-        lines.append(f"/{p}")
-    lines.append(_MARKER_END)
-    new_section = "\n".join(lines) + "\n"
-
+    new_section = _exclude_section(dest_root, link_paths, owned_dirs or [])
+    exclude_file.parent.mkdir(parents=True, exist_ok=True)
+    existing = exclude_file.read_text() if exclude_file.exists() else ""
     exclude_file.write_text(_merge_exclude_blocks(existing, dest_root, new_section))
 
 
@@ -201,6 +263,31 @@ def _merge_exclude_blocks(existing: str, dest_root: Path, new_section: str) -> s
             updated += "\n"
         updated += new_section
     return updated
+
+
+def _owned_dirs(key: str, is_fixed: bool, stack: SourceStack) -> list[str]:
+    """Destination-relative directories declared overlay-owned for *key*.
+
+    Same dot_ rewrite the files get, so the marker's directory and its files
+    agree on where they land.
+    """
+    out: list[str] = []
+    for rel in stack.owned_dirs_for_key(key):
+        dest_rel = rel if is_fixed else _dot_rewrite(rel)
+        parts = dest_rel.parts
+        if not parts or parts == (".",):
+            # `/` would exclude the whole destination, overlay files and the
+            # project's own tree alike.
+            print(
+                f"  own-marker: ignored at the root of key {key!r} — it would "
+                "exclude the entire destination",
+                file=sys.stderr,
+            )
+            continue
+        if parts[0] == ".git":
+            continue
+        out.append(dest_rel.as_posix())
+    return sorted(out)
 
 
 def _apply_key(
@@ -308,16 +395,21 @@ def _apply_key(
     return links, drift
 
 
-def _already_applied(dest_root: Path, key: str) -> bool:
+def _already_applied(dest_root: Path, key: str, is_fixed: bool, stack: SourceStack) -> bool:
     """Return True if the overlay for *key* is already materialised at *dest_root*.
 
     Checks the manifest and verifies every recorded symlink still exists and
     points to the expected target.  Used by *apply_one* to skip redundant
     re-application when cd'ing into a subdirectory of an already-applied repo.
+
+    The ``info/exclude`` block is part of "materialised": exclusion policy can
+    change with no change to any link (adding an ``.overlay-own`` marker does
+    exactly that), and a stale block is the leak this all exists to prevent.
     """
     manifest = read(dest_root)
     if not manifest.links:
         return False
+    paths: list[str] = []
     for lr in manifest.links:
         if lr.key != key:
             continue
@@ -327,7 +419,21 @@ def _already_applied(dest_root: Path, key: str) -> bool:
         # Resolve both target and recorded target so we compare real paths.
         if str(link.resolve()) != str(Path(lr.target).resolve()):
             return False
-    return True
+        paths.append(lr.path)
+    return _exclude_up_to_date(dest_root, paths, _owned_dirs(key, is_fixed, stack))
+
+
+def _exclude_up_to_date(dest_root: Path, link_paths: list[str], owned_dirs: list[str]) -> bool:
+    """Return True if *dest_root*'s exclude block already says what it should."""
+    exclude_file = _git_info_exclude(dest_root)
+    if exclude_file is None:
+        return True  # not a git repo: no block to keep in sync
+    expected = _exclude_section(dest_root, link_paths, owned_dirs, warn=False)
+    existing = exclude_file.read_text() if exclude_file.exists() else ""
+    for m in _EXCLUDE_BLOCK_RE.finditer(existing):
+        if m.group("label") == str(dest_root):
+            return m.group(0).strip("\n") == expected.strip("\n")
+    return expected == ""
 
 
 def apply_one(path: Path, config: AppConfig) -> bool:
@@ -353,7 +459,7 @@ def apply_one(path: Path, config: AppConfig) -> bool:
 
     # Skip silently if the overlay is already in place (avoids noisy output
     # when cd'ing into subdirectories of an already-applied repo).
-    if _already_applied(dest_root, key):
+    if _already_applied(dest_root, key, is_fixed, stack):
         return True
 
     return _apply_and_record(key, dest_root, is_fixed, stack, config, sources)
@@ -412,7 +518,7 @@ def _apply_and_record(
         if pruned:
             print(f"  pruned: {pruned}")
         write(dest_root, links, drift)
-        _update_git_exclude(dest_root, list(current_paths))
+        _update_git_exclude(dest_root, list(current_paths), _owned_dirs(key, is_fixed, stack))
     except OSError as e:
         print(f"  error: {_fmt_path(dest_root)}: {type(e).__name__}: {e}", file=sys.stderr)
         return False
