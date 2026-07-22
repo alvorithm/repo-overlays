@@ -139,6 +139,15 @@ systemctl --user enable --now repo-overlay.service
 systemctl --user status repo-overlay.service   # verify running
 ```
 
+### Optional: scheduled drift digest
+
+The watcher only reports drift it runs into. To catch broken links, missing
+partials and stale `diverged:` markers that no apply touches, run
+`repo-overlay status` from a daily systemd user timer and notify on a non-zero
+exit. This machine does it from the dotfiles repo (`config-drift.timer`,
+18:30, one `notify-send` covering both `chezmoi status` and `repo-overlay
+status`) — see [docs/USAGE.md § Scheduled drift digest](docs/USAGE.md).
+
 ### Optional: mise cd hook
 
 Fires `repo-overlay apply` whenever you `cd` into any directory. For directories under a `watched_root`, the overlay materialises immediately on entry.

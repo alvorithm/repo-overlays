@@ -220,6 +220,31 @@ partial sweep — a manifest read plus one stat per link, tens of milliseconds,
 and silent when clean. That form is meant for a directory-enter hook, next to
 `repo-overlay apply`, the way `chezmoi status` is used.
 
+### Scheduled drift digest
+
+The watcher notifies about drift *when an apply hits it*. Issues that no apply
+touches — a broken link after a source move, a `.mo` whose partial went away,
+a `diverged:` marker left unresolved for weeks — surface only if something
+runs `status`. On this machine a systemd user timer does that daily:
+
+| Piece | Path |
+|---|---|
+| script | `~/.local/bin/config-drift-notify` (chezmoi source: `dot_local/bin/executable_config-drift-notify`) |
+| units | `config-drift.{service,timer}` under `~/.config/systemd/user/` |
+| schedule | 18:30 daily, `Persistent=true`, 15 min jitter |
+
+It runs `chezmoi status` and `repo-overlay status`, and sends one
+`notify-send` listing at most 8 paths per section; both clean ⇒ no
+notification. Everything lives in the dotfiles repo (`~/.local/share/chezmoi`,
+README § Config-drift notifier), not here — `repo-overlay status` is the
+stable interface it depends on: **line-per-issue on stdout, exit 1 when any
+issue was found, `All overlays clean.` and exit 0 otherwise.** The digest
+filters that sentinel line out by exact match.
+
+Deliberately not in shell startup: agent harnesses (pi, omp, Claude Code)
+capture shell stderr into their tool results, so a per-shell reminder banner
+pollutes every agent transcript.
+
 ### The event log
 
 Two things happen once and matter later, so both are appended to
