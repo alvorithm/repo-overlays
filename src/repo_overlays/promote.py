@@ -5,13 +5,11 @@ from __future__ import annotations
 import difflib
 import os
 import subprocess
-import sys
 from pathlib import Path
 
 from .config import AppConfig
 from .manifest import divergent_markers
 from .resolve import iter_all_destinations
-from .sources import SourceStack
 
 
 def _find_divergent(dest_root: Path, key: str | None = None) -> list[Path]:

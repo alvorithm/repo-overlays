@@ -14,7 +14,6 @@ from pathlib import Path
 from repo_overlays.manifest import (
     MANIFEST_FILENAME,
     LinkRecord,
-    Manifest,
     prune,
     read,
     write,

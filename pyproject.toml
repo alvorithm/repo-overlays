@@ -18,10 +18,16 @@ repo-overlay = "repo_overlays.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/repo_overlays"]
 
+[tool.ruff]
+# Matches the existing code. Only the default lint rules run; `ruff format` is
+# not adopted — it would reflow every file for no correctness gain.
+line-length = 100
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
 [dependency-groups]
 dev = [
     "pytest>=8",
+    "ruff>=0.15.22",
 ]

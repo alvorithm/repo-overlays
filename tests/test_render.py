@@ -20,8 +20,6 @@ from repo_overlays.config import AppConfig, SourceConfig
 from repo_overlays.render import render_template
 from repo_overlays.sources import SourceStack
 from tests.conftest import make_source
-from repo_overlays.sources import SourceStack
-from tests.conftest import make_source, make_top_config
 
 
 def _stack_from_dirs(tmp: Path, *source_dirs: tuple[Path, str, bool]) -> tuple[AppConfig, SourceStack]:
