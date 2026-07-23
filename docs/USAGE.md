@@ -205,6 +205,7 @@ ln -sf $PWD/.venv/bin/repo-overlay ~/.local/bin/`
 These commands are available
 
 ```
+repo-overlay init [<path>]       # bootstrap a repo's key from _template/ (dry-run; --write)
 repo-overlay apply [<path>]      # materialise; default = apply everything
 repo-overlay promote <key>       # reconcile drift interactively
 repo-overlay render <src> <dst>  # (internal) render one template
@@ -219,6 +220,44 @@ path it checks only the destination containing it and skips the template
 partial sweep — a manifest read plus one stat per link, tens of milliseconds,
 and silent when clean. That form is meant for a directory-enter hook, next to
 `repo-overlay apply`, the way `chezmoi status` is used.
+
+### `init` — bootstrap a new repo's overlay
+
+A repo cloned under a watched root gets no overlay coverage until a key
+directory exists for it, and nothing in the flow reminds you — so it is
+forgotten essentially every time. `init` instantiates each source's
+`_template/` skeleton into `<source>/<key>/` for the resolved destination, then
+applies it.
+
+```sh
+repo-overlay init                # dry-run for the cwd's repo: lists what it would create
+repo-overlay init <path> --write # create the missing files, then apply the destination
+repo-overlay init --source memory-bus --slug my-repo --write
+```
+
+- **`_template/`** is a reserved source directory (like `_shared`/`_rendered`,
+  never an overlay key). Its layout mirrors `<source>/<key>/`, using the same
+  `dot_` names. Each source owns its own skeleton — `memory-bus` the memory
+  wiring, `defaults` the guidance — so `init` walks the stack and writes each
+  source's template into that source's tree only.
+- **Variables**, substituted in file paths and bodies: `{{key}}` (resolved
+  overlay key), `{{slug}}` (`--slug`, else kebab-cased basename), `{{dest}}`
+  (absolute destination), `{{remote}}` (origin `owner_repo`, else empty). Only
+  these four are touched; `{{>_shared/…}}` partials and any other `{{…}}` are
+  left for `apply` to render — a `.mo` in the skeleton stays a live template.
+- **Dry-run by default**; `--write` creates only absent files (never clobbers a
+  hand-edited one) and ends by applying the destination. Exit codes follow
+  `status`: 0 = nothing to do, 1 = files missing/created, ≥2 = error. Re-running
+  after adding a template file therefore backfills exactly that file.
+- The key is resolved exactly as `apply` resolves it (`resolve_key_dest`), so a
+  linked worktree bootstraps its *repo's* key once, not one per worktree.
+
+**Discovery.** `repo-overlay status --unmanaged` additionally lists git repos
+under the watched roots that no key covers, each with the `init` command to fix
+it. It is **off by default on purpose**: the scheduled drift digest consumes
+`status` and treats any line as an issue, so surfacing every bare repo
+unconditionally would turn the daily signal into a permanent nag. Run it
+on demand; the digest does not pass the flag.
 
 ### Scheduled drift digest
 

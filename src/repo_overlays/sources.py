@@ -52,7 +52,7 @@ class SourceStack:
                 if not child.is_dir():
                     continue
                 key = child.name
-                if key.startswith(("_rendered", ".git", "__pycache__")):
+                if key.startswith(("_rendered", "_template", ".git", "__pycache__")):
                     continue
                 if key in src.ignore_keys:
                     continue

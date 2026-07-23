@@ -84,6 +84,21 @@ def cmd_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_init(args: argparse.Namespace) -> int:
+    """Bootstrap a destination's overlay key from each source's _template/."""
+    from .bootstrap import bootstrap
+
+    config = _load(args)
+    path = Path(getattr(args, "path", None) or ".").resolve()
+    return bootstrap(
+        path,
+        config,
+        only_sources=args.source or None,
+        slug=args.slug,
+        write=args.write,
+    )
+
+
 def cmd_config(args: argparse.Namespace) -> int:
     config = _load(args)
     print(f"Config: {TOP_LEVEL_CONFIG.expanduser()}")
@@ -151,6 +166,17 @@ def cmd_status(args: argparse.Namespace) -> int:
             print(f"diverged: {marker.parent}")
             issues += 1
 
+    # Unkeyed repos are surfaced only behind --unmanaged: the daily drift digest
+    # consumes `status` and treats any line as an issue, so emitting these
+    # unconditionally would turn a signal into a permanent nag. Off by default
+    # keeps the digest contract (line-per-issue, exit 1) intact.
+    if not path and getattr(args, "unmanaged", False):
+        from .bootstrap import unmanaged_destinations
+
+        for dest in unmanaged_destinations(config):
+            print(f"unmanaged: {dest} — repo-overlay init {dest}")
+            issues += 1
+
     if not path:
         stack = SourceStack(config)
         for key in stack.iter_keys():
@@ -202,11 +228,28 @@ def _build_parser() -> argparse.ArgumentParser:
     lp = sub.add_parser("list", help="List every live file tracked by overlays ($HOME-relative)")
     lp.set_defaults(func=cmd_list)
 
+    ip = sub.add_parser("init", help="Bootstrap a repo's overlay key from _template/")
+    ip.add_argument("path", nargs="?", help="Destination path (default: cwd)")
+    ip.add_argument(
+        "--source", action="append", metavar="NAME",
+        help="Limit to this source (repeatable; default: every source with a _template/)",
+    )
+    ip.add_argument("--slug", help="Slug for {{slug}} (default: kebab-cased basename)")
+    ip.add_argument(
+        "--write", action="store_true",
+        help="Create the missing files (default: dry-run), then apply the destination",
+    )
+    ip.set_defaults(func=cmd_init)
+
     cp = sub.add_parser("config", help="Print effective configuration")
     cp.set_defaults(func=cmd_config)
 
     sp = sub.add_parser("status", help="Report broken links, drift, missing partials")
     sp.add_argument("path", nargs="?", help="Limit to the destination containing PATH (fast)")
+    sp.add_argument(
+        "--unmanaged", action="store_true",
+        help="Also list git repos under watched roots that no overlay key covers",
+    )
     sp.set_defaults(func=cmd_status)
 
     return p

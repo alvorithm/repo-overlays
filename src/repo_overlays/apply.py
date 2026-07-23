@@ -479,7 +479,7 @@ def apply_one(path: Path, config: AppConfig) -> bool:
     if result is None:
         return False
     key, dest_root, is_fixed = result
-    if key.startswith(("_rendered", "_shared")):
+    if key.startswith(("_rendered", "_shared", "_template")):
         return False
 
     stack = SourceStack(config)
