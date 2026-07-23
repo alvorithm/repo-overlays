@@ -60,7 +60,9 @@ class SourceStack:
                     seen.add(key)
                     yield key
 
-    def iter_files_for_key(self, key: str) -> Iterator[tuple[Path, SourceConfig]]:
+    def iter_files_for_key(
+        self, key: str, *, report_overrides: bool = True
+    ) -> Iterator[tuple[Path, SourceConfig]]:
         """Yield (absolute_file_path, source) for each file under key.
 
         Later sources override earlier ones on per-relative-path conflict, and
@@ -69,6 +71,10 @@ class SourceStack:
         That is the hazard when one key is served by several sources (guidance
         in one, memory wiring in another).  Yields in final precedence order
         (each file once, from the winning source).
+
+        *report_overrides* is off for callers that only need the file set, not
+        the side effect — the ``_already_applied`` cd-hook check would otherwise
+        reprint every override on each directory entry.
         """
         # Build map: rel_path → (abs_path, source); later sources win.
         merged: dict[Path, tuple[Path, SourceConfig]] = {}
@@ -84,7 +90,7 @@ class SourceStack:
                 rel = abs_path.relative_to(key_dir)
                 if _is_junk(rel):
                     continue
-                if rel in merged:
+                if rel in merged and report_overrides:
                     loser = merged[rel][1]
                     print(
                         f"  override: {key}/{rel}: {src.name} replaces {loser.name} "

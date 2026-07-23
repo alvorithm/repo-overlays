@@ -7,7 +7,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Iterable, Iterator
+from typing import Iterable
 
 from .config import AppConfig, SourceConfig
 from .manifest import (
@@ -110,6 +110,28 @@ def _resolve_dest(dest_root: Path, dest_rel: Path) -> Path | None:
             return None
         return _git_path(dest_root, str(rest))
     return dest_root / dest_rel
+
+
+def _dest_rel_for(rel: Path, is_fixed: bool) -> Path:
+    """Destination-relative path for a source-relative *rel*.
+
+    Applies the ``dot_`` rewrite (project keys only) and strips a ``.mo``
+    template suffix, so a source file and the checks that reason about where it
+    lands never disagree on the mapping.
+    """
+    dest_rel = rel if is_fixed else _dot_rewrite(rel)
+    if rel.suffix == ".mo":
+        dest_rel = dest_rel.with_suffix("")
+    return dest_rel
+
+
+def _planned_dest(rel: Path, dest_root: Path, is_fixed: bool) -> Path | None:
+    """Final destination path a source-relative *rel* would materialise to.
+
+    None when it targets the git dir of a directory that is not a git repo —
+    exactly the case ``_apply_key`` skips — so both agree on what gets placed.
+    """
+    return _resolve_dest(dest_root, _dest_rel_for(rel, is_fixed))
 
 
 def _git_info_exclude(dest_root: Path) -> Path | None:
@@ -309,53 +331,36 @@ def _apply_key(
     for abs_src, src in stack.iter_files_for_key(key):
         key_dir = src.path / key
         rel = abs_src.relative_to(key_dir)
+        dest_rel = _dest_rel_for(rel, is_fixed)
 
-        if is_fixed:
-            dest_rel = rel
-        else:
-            dest_rel = _dot_rewrite(rel)
+        final_dest = _resolve_dest(dest_root, dest_rel)
+        if final_dest is None:
+            print(
+                f"  skip: {dest_rel} targets the git dir of "
+                f"{_fmt_path(dest_root)}, which is not a git repo",
+                file=sys.stderr,
+            )
+            continue
 
-        is_template = rel.suffix == ".mo"
-        if is_template:
-            rendered_dir = _rendered_dir(src, key)
-            rendered_dest = rendered_dir / rel.with_suffix("")
-            live_dest_rel = dest_rel.with_suffix("")
-            live_dest = _resolve_dest(dest_root, live_dest_rel)
-            if live_dest is None:
-                print(
-                    f"  skip: {live_dest_rel} targets the git dir of "
-                    f"{_fmt_path(dest_root)}, which is not a git repo",
-                    file=sys.stderr,
-                )
-                continue
-
+        if rel.suffix == ".mo":
+            rendered_dest = _rendered_dir(src, key) / rel.with_suffix("")
             status = render_template(
                 src=abs_src,
                 rendered_dest=rendered_dest,
                 stack=stack,
                 requesting=src,
-                live_dest=live_dest if live_dest.exists() and not live_dest.is_symlink() else None,
+                live_dest=final_dest if final_dest.exists() and not final_dest.is_symlink() else None,
             )
             if status == "diverged":
                 print(
-                    f"  drift: {live_dest_rel} (kept live; .proposed written)",
+                    f"  drift: {dest_rel} (kept live; .proposed written)",
                     file=sys.stderr,
                 )
-                drift.append(str(live_dest_rel))
+                drift.append(str(dest_rel))
                 continue
             link_target = rendered_dest
-            final_dest = live_dest
         else:
             link_target = abs_src
-            resolved = _resolve_dest(dest_root, dest_rel)
-            if resolved is None:
-                print(
-                    f"  skip: {dest_rel} targets the git dir of "
-                    f"{_fmt_path(dest_root)}, which is not a git repo",
-                    file=sys.stderr,
-                )
-                continue
-            final_dest = resolved
 
         try:
             final_dest.parent.mkdir(parents=True, exist_ok=True)
@@ -398,29 +403,58 @@ def _apply_key(
 def _already_applied(dest_root: Path, key: str, is_fixed: bool, stack: SourceStack) -> bool:
     """Return True if the overlay for *key* is already materialised at *dest_root*.
 
-    Checks the manifest and verifies every recorded symlink still exists and
-    points to the expected target.  Used by *apply_one* to skip redundant
-    re-application when cd'ing into a subdirectory of an already-applied repo.
+    "Materialised" means a fresh apply would be a no-op: every source file the
+    key currently produces is accounted for at the destination, every recorded
+    link is intact, and the ``info/exclude`` block is current.  Used by
+    *apply_one* to skip redundant re-application when cd'ing into a subdirectory
+    of an already-applied repo.
 
-    The ``info/exclude`` block is part of "materialised": exclusion policy can
-    change with no change to any link (adding an ``.overlay-own`` marker does
-    exactly that), and a stale block is the leak this all exists to prevent.
+    Comparing the *set* of produced paths (not just validating recorded links)
+    is what catches a source file **added** since the last apply: its
+    destination is absent from the manifest, so the check must not report
+    "applied" while it is still missing on disk.  The old form validated only
+    recorded links, so a new source file was never materialised through this
+    path until something else invalidated the manifest.
+
+    The ``info/exclude`` block is part of "materialised" too: exclusion policy
+    can change with no change to any link (adding an ``.overlay-own`` marker
+    does exactly that), and a stale block is the leak this all exists to
+    prevent.
     """
     manifest = read(dest_root)
-    if not manifest.links:
-        return False
-    paths: list[str] = []
-    for lr in manifest.links:
-        if lr.key != key:
-            continue
+    if not manifest.links and not manifest.drift:
+        return False  # no manifest yet (or empty): never applied here
+
+    # Every destination path a fresh apply would place. report_overrides is off:
+    # this runs on every cd, and the override warnings are the real apply's job.
+    planned: set[str] = set()
+    for abs_src, src in stack.iter_files_for_key(key, report_overrides=False):
+        rel = abs_src.relative_to(src.path / key)
+        final_dest = _planned_dest(rel, dest_root, is_fixed)
+        if final_dest is None:
+            continue  # git-dir file in a non-git dir: apply skips it too
+        planned.add(_record_path(dest_root, final_dest))
+
+    recorded = [lr for lr in manifest.links if lr.key == key]
+    # A diverged template produces no link but is accounted for: its path sits
+    # in manifest.drift. Re-converging it is the watcher's job on the next
+    # template edit, not this cheap presence check's — so treat it as placed,
+    # else a destination with standing drift would re-apply on every cd.
+    accounted = {lr.path for lr in recorded} | set(manifest.drift)
+    if planned != accounted:
+        return False  # a source file was added or removed since the last apply
+
+    for lr in recorded:
         link = dest_root / lr.path
         if not link.is_symlink() or not link.exists():
             return False
         # Resolve both target and recorded target so we compare real paths.
         if str(link.resolve()) != str(Path(lr.target).resolve()):
             return False
-        paths.append(lr.path)
-    return _exclude_up_to_date(dest_root, paths, _owned_dirs(key, is_fixed, stack))
+
+    return _exclude_up_to_date(
+        dest_root, [lr.path for lr in recorded], _owned_dirs(key, is_fixed, stack)
+    )
 
 
 def _exclude_up_to_date(dest_root: Path, link_paths: list[str], owned_dirs: list[str]) -> bool:

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .apply import apply_all, apply_one, tracked_links
 from .config import TOP_LEVEL_CONFIG, AppConfig, load_config
-from .manifest import MANIFEST_FILENAME, divergent_markers, read as read_manifest
+from .manifest import divergent_markers, read as read_manifest
 from .promote import promote
 from .resolve import iter_all_destinations, resolve_key_dest
 from .sources import SourceStack
@@ -122,6 +122,13 @@ def cmd_status(args: argparse.Namespace) -> int:
         destinations = [resolved]
     else:
         destinations = list(iter_all_destinations(config))
+        # Zero destinations means the config never loaded (missing file, parse
+        # error, empty source stack) — not a clean state. Reporting "clean"
+        # here hides exactly the failure a drift digest exists to surface.
+        if not destinations:
+            cfg_path = getattr(args, "config", None) or TOP_LEVEL_CONFIG.expanduser()
+            print(f"no-destinations: no overlays resolved from {cfg_path}")
+            return 1
 
     for key, dest_root, is_fixed in destinations:
         manifest = read_manifest(dest_root)

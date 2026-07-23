@@ -484,7 +484,7 @@ def test_list_outputs_home_relative_paths(tmp: Path, capsys: pytest.CaptureFixtu
     assert ret == 0
 
     out = capsys.readouterr().out
-    lines = [l.strip() for l in out.split("\n") if l.strip()]
+    lines = [line.strip() for line in out.split("\n") if line.strip()]
 
     # Spot-check known entries. Paths outside $HOME are printed absolute.
     assert f"{fixed_dest}/CONFIG.md" in lines, f"missing CONFIG.md in {lines}"
@@ -953,3 +953,123 @@ def test_marker_added_later_rewrites_a_stale_exclude_block(tmp: Path) -> None:
     exclude = _exclude_of(project)
     assert "/work/\n" in exclude
     assert "/work/wf-now/plan.md" not in exclude
+
+
+# ── _already_applied: source changes since last apply ──────────────────────
+
+
+def test_apply_one_materialises_a_file_added_after_first_apply(tmp: Path) -> None:
+    """The FIXES.md bug: a source file added post-apply was never placed.
+
+    `_already_applied` validated only recorded links, so a new source file —
+    absent from the manifest — left the check reporting "applied" while the
+    file was still missing at the destination. `repo-overlay apply <path>`
+    (mise/emacs hooks, and the CLI with an argument) then skipped it.
+    """
+    src_dir = make_source(tmp, "personal")
+    project = tmp / "myproject"
+    _git_init(project)
+    overlay = src_dir / "myproject"
+    overlay.mkdir(parents=True)
+    (overlay / "AGENTS.md").write_text("guidance\n")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+    assert apply_one(project, config) is True
+    assert {lr.path for lr in read_manifest(project).links} == {"AGENTS.md"}
+
+    # Add a second file to the source, then re-apply the same path.
+    (overlay / "CLAUDE.md").write_text("more guidance\n")
+    assert apply_one(project, config) is True
+
+    assert (project / "CLAUDE.md").is_symlink()
+    assert (project / "CLAUDE.md").resolve() == (overlay / "CLAUDE.md").resolve()
+    assert {lr.path for lr in read_manifest(project).links} == {"AGENTS.md", "CLAUDE.md"}
+
+
+def test_apply_one_prunes_a_file_removed_after_first_apply(tmp: Path) -> None:
+    """Symmetric case: a source file deleted post-apply is pruned on re-apply."""
+    src_dir = make_source(tmp, "personal")
+    project = tmp / "myproject"
+    _git_init(project)
+    overlay = src_dir / "myproject"
+    overlay.mkdir(parents=True)
+    (overlay / "AGENTS.md").write_text("guidance\n")
+    (overlay / "CLAUDE.md").write_text("more\n")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+    apply_one(project, config)
+    assert (project / "CLAUDE.md").is_symlink()
+
+    (overlay / "CLAUDE.md").unlink()
+    assert apply_one(project, config) is True
+
+    assert not (project / "CLAUDE.md").exists()
+    assert {lr.path for lr in read_manifest(project).links} == {"AGENTS.md"}
+
+
+def test_already_applied_is_true_when_nothing_changed(tmp: Path) -> None:
+    """The fast path still fires: no source change → no re-apply, no churn."""
+    from repo_overlays.apply import _already_applied
+    from repo_overlays.sources import SourceStack
+
+    src_dir = make_source(tmp, "personal")
+    project = tmp / "myproject"
+    _git_init(project)
+    overlay = src_dir / "myproject"
+    overlay.mkdir(parents=True)
+    (overlay / "AGENTS.md").write_text("guidance\n")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+    apply_one(project, config)
+
+    assert _already_applied(project, "myproject", False, SourceStack(config)) is True
+
+
+def test_already_applied_ignores_standing_drift(tmp: Path) -> None:
+    """A destination with recorded drift must not re-apply on every cd.
+
+    The diverged template yields no link, only a manifest.drift entry; the
+    presence check treats that as accounted for, so it stays on the fast path.
+    """
+    from repo_overlays.apply import _already_applied
+    from repo_overlays.sources import SourceStack
+
+    src_dir = make_source(tmp, "personal")
+    project = tmp / "myproject"
+    _git_init(project)
+    overlay = src_dir / "myproject"
+    (overlay / "work").mkdir(parents=True)
+    (overlay / "work" / "guide.md.mo").write_text("v1\n")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+    apply_one(project, config)
+
+    # Diverge the live file and bump the template, then apply to record drift.
+    live = project / "work" / "guide.md"
+    live.unlink()
+    live.write_text("the agent's own version\n")
+    (overlay / "work" / "guide.md.mo").write_text("v2\n")
+    apply_one(project, config)
+    assert read_manifest(project).drift == ["work/guide.md"]
+
+    # With drift standing and no source change, the fast path holds.
+    assert _already_applied(project, "myproject", False, SourceStack(config)) is True
+
+
+def test_status_reports_no_destinations_instead_of_clean(tmp: Path, capsys) -> None:
+    """A config that resolves zero destinations is a failure, not a clean run.
+
+    Previously `status` printed "All overlays clean." and exited 0 when the
+    config never loaded — the drift digest then reported all-clear on a broken
+    setup. It must exit non-zero with a distinct marker instead.
+    """
+    import argparse
+    from repo_overlays.cli import cmd_status
+
+    missing = tmp / "does-not-exist.toml"
+    rc = cmd_status(argparse.Namespace(config=str(missing), path=None))
+
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert out.startswith("no-destinations:")
+    assert "All overlays clean." not in out
