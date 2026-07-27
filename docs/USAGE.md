@@ -112,7 +112,7 @@ After any of these interventions, you materialise rendered overlay sources to th
 - a systemd user service (`repo-overlay.service`), whenever files change under any
   overlay source or watched root;
 - a `mise enter` hook when you `cd` into a watched project (the first entry prints a confirmation line; re-entering an already-applied repo or any of its subdirectories is silent);
-- an Emacs `find-file-hook` / `project-switch-hook` 
+- an Emacs `find-file-hook`, plus `:after` advice on `project-switch-project` (memoised per root per session; note there is no `project-switch-hook` in `project.el`, despite what earlier revisions of the README suggested)
 
 See below for installation notes for systemd/mise/emacs.
 

@@ -176,24 +176,41 @@ is silent — the overlay is already in place once materialised.
 Fires `repo-overlay apply` for the current project whenever you open a file or switch projects. Runs asynchronously so it never blocks Emacs.
 
 ```elisp
-(defun my/repo-overlay-apply ()
-  "Materialise repo-overlays for the current project root."
-  (when-let* ((root (or (and (fboundp 'project-current)
+(defvar my/repo-overlay--applied (make-hash-table :test #'equal)
+  "Project roots already handed to `repo-overlay apply' in this session.")
+
+(defun my/repo-overlay-apply (&optional dir)
+  "Materialise repo-overlays for DIR, or for the current project root.
+Asynchronous, and at most once per root per session."
+  (when-let* ((root (or dir
+                        (and (fboundp 'project-current)
                              (project-current)
                              (project-root (project-current)))
                         (locate-dominating-file
-                         (or buffer-file-name default-directory) ".git"))))
+                         (or buffer-file-name default-directory) ".git")))
+              (root (expand-file-name root))
+              ((not (gethash root my/repo-overlay--applied))))
+    (puthash root t my/repo-overlay--applied)
     (call-process-shell-command
-     (concat "repo-overlay apply "
-             (shell-quote-argument (expand-file-name root))
-             " &")
+     (concat "repo-overlay apply " (shell-quote-argument root) " &")
      nil 0)))
 
-(add-hook 'find-file-hook      #'my/repo-overlay-apply)
-(add-hook 'project-switch-hook #'my/repo-overlay-apply)
+(defun my/repo-overlay-forget ()
+  "Forget which roots have been applied, so the next visit re-applies."
+  (interactive)
+  (clrhash my/repo-overlay--applied)
+  (message "repo-overlay: memo cleared"))
+
+(add-hook 'find-file-hook #'my/repo-overlay-apply)
+(advice-add 'project-switch-project :after #'my/repo-overlay-apply)
 ```
 
 Add this to your `init.el` or `early-init.el`. Requires `repo-overlay` on `$PATH` (i.e. `~/.local/bin/` in `exec-path`).
+
+Two things worth knowing about the shape of this snippet:
+
+- **There is no `project-switch-hook`.** Earlier revisions of this section used one. `project.el` has never defined it, and `add-hook` silently interns any symbol you hand it, so the line looked correct, raised nothing, and never ran. Advising `project-switch-project` is the working equivalent.
+- **The memo is not an optimisation detail.** `find-file-hook` runs per buffer, so without it a twenty-file session forks twenty identical `apply` runs against the same root. Live edits to overlay sources are picked up by `repo-overlay.service`, not by this hook, so caching for the session costs nothing; `M-x my/repo-overlay-forget` forces a re-apply if you want one.
 
 
 ## Configuration
