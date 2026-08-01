@@ -1206,6 +1206,105 @@ def test_status_reports_invalid_json_template(tmp: Path, capsys) -> None:
     assert "invalid-json:" in out
 
 
+def test_data_toml_never_materialises(tmp: Path) -> None:
+    """data.toml is a declaration like .overlay-own: it gates rendering but
+    must never appear at the destination or in the manifest."""
+    src_dir = make_source(tmp, "personal")
+    project = tmp / "myproject"
+    _git_init(project)
+    overlay = src_dir / "myproject"
+    overlay.mkdir(parents=True)
+    (overlay / "data.toml").write_text("name = 'x'\n")
+    (overlay / "CLAUDE.md.mo").write_text("{{name}}\n")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+    apply_one(project, config)
+
+    assert not (project / "data.toml").exists()
+    assert {lr.path for lr in read_manifest(project).links} == {"CLAUDE.md"}
+    assert (project / "CLAUDE.md").read_text() == "x\n"
+
+
+def test_data_edit_reapplies_via_render_hash(tmp: Path) -> None:
+    """Editing data.toml changes no path; the render hash must re-arm
+    apply <path> so the cd/editor hooks re-render."""
+    from repo_overlays.apply import _already_applied
+    from repo_overlays.sources import SourceStack
+
+    src_dir = make_source(tmp, "personal")
+    project = tmp / "myproject"
+    _git_init(project)
+    overlay = src_dir / "myproject"
+    overlay.mkdir(parents=True)
+    (overlay / "data.toml").write_text("name = 'v1'\n")
+    (overlay / "CLAUDE.md.mo").write_text("{{name}}\n")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+    apply_one(project, config)
+    assert (project / "CLAUDE.md").read_text() == "v1\n"
+
+    (overlay / "data.toml").write_text("name = 'v2'\n")
+    assert _already_applied(project, "myproject", False, SourceStack(config)) is False
+    apply_one(project, config)
+    assert (project / "CLAUDE.md").read_text() == "v2\n"
+
+
+def test_data_driven_invalid_json_keeps_last_good(tmp: Path) -> None:
+    """A data edit that breaks the rendered JSON is refused; the last good
+    render stays live and the link is re-recorded (fast path keeps holding)."""
+    from repo_overlays.apply import _already_applied
+    from repo_overlays.sources import SourceStack
+
+    src_dir = make_source(tmp, "personal")
+    project = tmp / "myproject"
+    _git_init(project)
+    overlay = src_dir / "myproject"
+    overlay.mkdir(parents=True)
+    (overlay / "data.toml").write_text('args = \'["ok"]\'\n')
+    (overlay / "mcp.json.mo").write_text('{\n  "args": {{{args}}}\n}\n')
+
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+    apply_one(project, config)
+    live = project / "mcp.json"
+    assert json.loads(live.read_text())["args"] == ["ok"]
+
+    (overlay / "data.toml").write_text('args = \'["broken\'\n')
+    assert apply_one(project, config) is True
+    assert json.loads(live.read_text())["args"] == ["ok"], "last good must survive"
+    assert _already_applied(project, "myproject", False, SourceStack(config)) is True
+
+    (overlay / "data.toml").write_text('args = \'["fixed"]\'\n')
+    assert apply_one(project, config) is True
+    assert json.loads(live.read_text())["args"] == ["fixed"]
+
+
+def test_status_lints_unknown_data_ref(tmp: Path, capsys) -> None:
+    """status flags a plain {{ref}} that resolves against no data key; refs
+    inside sections and known names stay silent."""
+    import argparse
+    from repo_overlays.cli import cmd_status
+
+    dest = tmp / "cfg"
+    dest.mkdir(parents=True)
+    src_dir = make_source(tmp, "personal", targets={"_cfg": str(dest)})
+    (src_dir / "_cfg").mkdir(exist_ok=True)
+    (src_dir / "_cfg" / "data.toml").write_text(
+        "name = 'penpot'\n"
+        "[[servers]]\nname = 'penpot'\n"
+    )
+    (src_dir / "_cfg" / "CLAUDE.md.mo").write_text(
+        "{{name}} {{typo}} {{#servers}}{{name}}{{/servers}}\n"
+    )
+    top = make_top_config(tmp, [{"name": "personal", "path": str(src_dir)}])
+
+    rc = cmd_status(argparse.Namespace(config=str(top), path=None))
+    out = capsys.readouterr().out
+    assert rc == 1
+    refs = [line.rsplit(": ", 1)[1] for line in out.splitlines()
+            if line.startswith("unknown-data-ref:")]
+    assert refs == ["typo"], refs
+
+
 def test_status_reports_no_destinations_instead_of_clean(tmp: Path, capsys) -> None:
     """A config that resolves zero destinations is a failure, not a clean run.
 

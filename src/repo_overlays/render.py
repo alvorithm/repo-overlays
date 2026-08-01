@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 from typing import Literal
 
+import chevron
+
 from .events import record
 from .sources import SourceStack, SourceConfig
 
@@ -34,27 +36,116 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def resolve_template_text(
+    src: Path,
+    stack: SourceStack,
+    requesting: SourceConfig | None = None,
+) -> str:
+    """Resolve a template's partials to text, without data rendering.
+
+    The tags stay intact, which is what the status lint needs; see
+    :func:`render_text` for the full render.
+    """
+    loader = _PartialLoader(stack, requesting)
+    return _resolve_partials(src.read_text(), loader)
+
+
+def render_text(
+    src: Path,
+    stack: SourceStack,
+    requesting: SourceConfig | None = None,
+    key: str | None = None,
+) -> str:
+    """Resolve a template to the exact text a render would write.
+
+    Pure (no filesystem writes); used for content hashing in the manifest so
+    an apply can tell whether a live file is current without re-rendering.
+
+    *key* gates variable rendering: only a key carrying a ``data.toml`` gets
+    Mustache variables and sections (chevron over the partial-resolved text);
+    without one the output is byte-identical to legacy partial-only
+    resolution, and ``{{variable}}``/``{{#section}}`` stay verbatim.
+    """
+    text = resolve_template_text(src, stack, requesting)
+    if key is not None:
+        data = stack.data_for_key(key, requesting)
+        if data is not None:
+            text = chevron.render(text, data, partials_path="", partials_dict={})
+    return text
+
+
 def render_bytes(
     src: Path,
     stack: SourceStack,
     requesting: SourceConfig | None = None,
+    key: str | None = None,
 ) -> bytes:
-    """Resolve a template's partials to the exact bytes a render would write.
-
-    Pure (no filesystem writes); used for content hashing in the manifest so
-    an apply can tell whether a live file is current without re-rendering.
-    """
-    loader = _PartialLoader(stack, requesting)
-    return _resolve_partials(src.read_text(), loader).encode()
+    """UTF-8 encoding of :func:`render_text`."""
+    return render_text(src, stack, requesting, key).encode()
 
 
 def render_hash(
     src: Path,
     stack: SourceStack,
     requesting: SourceConfig | None = None,
+    key: str | None = None,
 ) -> str:
     """SHA-256 of the render output for *src* (see render_bytes)."""
-    return _sha256(render_bytes(src, stack, requesting))
+    return _sha256(render_bytes(src, stack, requesting, key))
+
+
+#: Every tag a data-active template can contain. Plain refs (group 2 with an
+#: empty group 1) are the ones the status lint checks against the data.
+_TAG_RE = re.compile(r"(?<!\{)\{\{([#^/&!>]?)\s*([\w.]+?)\s*\}\}")
+
+
+def lint_data_refs(text: str, data: dict) -> list[str]:
+    """Return plain-variable refs in *text* that resolve against no data key.
+
+    Section context is tracked like chevron's context stack: a ref resolves
+    against the innermost open section's item, falling back to the root data
+    (Mustache stack lookup). ``{{.}}``, triple-stache, partials, comments and
+    delimiter changes are exempt. Best-effort by design: the daily digest eats
+    the output, so a false positive costs more than a missed typo.
+    """
+    unknown: list[str] = []
+    sections: list[dict | None] = []  # context node per open section, or None
+
+    def section_node(name: str) -> dict | None:
+        node = data.get(name)
+        if isinstance(node, list) and node:
+            node = node[0]
+        return node if isinstance(node, dict) else None
+
+    def resolves(node: dict | None, name: str) -> bool:
+        if node is None:
+            return False
+        for segment in name.split("."):
+            if isinstance(node, dict) and segment in node:
+                node = node[segment]
+            else:
+                return False
+        return True
+
+    def known(name: str) -> bool:
+        if name == ".":
+            return True
+        for node in reversed(sections):
+            if resolves(node, name):
+                return True
+        return resolves(data, name)
+
+    for m in _TAG_RE.finditer(text):
+        kind, name = m.group(1), m.group(2)
+        if kind in ("#", "^"):
+            sections.append(section_node(name))
+        elif kind == "/":
+            if sections:
+                sections.pop()
+        elif kind in ("", "&"):
+            if not known(name):
+                unknown.append(name)
+    return unknown
 
 
 def render_template(
@@ -63,6 +154,7 @@ def render_template(
     stack: SourceStack,
     requesting: SourceConfig | None = None,
     live_dest: Path | None = None,
+    key: str | None = None,
 ) -> RenderStatus:
     """Render a *.mo template to rendered_dest; detect drift against live_dest.
 
@@ -72,6 +164,7 @@ def render_template(
         stack: Source stack for partial resolution.
         requesting: Source that owns the template (for privacy checks).
         live_dest: The live symlink target; used for drift detection.
+        key: Overlay key; gates data-driven rendering (see render_bytes).
 
     Returns:
         "ok"       — rendered and written (first render or re-render of unchanged live file).
@@ -79,7 +172,7 @@ def render_template(
         "diverged"  — live file has been externally modified; .proposed written.
         "invalid"   — a *.json.mo rendered to unparseable JSON; nothing written.
     """
-    rendered_bytes = render_bytes(src, stack, requesting)
+    rendered_bytes = render_bytes(src, stack, requesting, key)
 
     # A template that produces a *.json destination must render to parseable
     # JSON, or the harness reading the live file breaks (dirge would fall back

@@ -11,7 +11,7 @@ from .apply import apply_all, apply_one, tracked_links
 from .config import TOP_LEVEL_CONFIG, AppConfig, load_config
 from .manifest import divergent_markers, read as read_manifest
 from .promote import promote
-from .render import render_bytes, render_hash
+from .render import lint_data_refs, render_bytes, render_hash, render_text, resolve_template_text
 from .resolve import iter_all_destinations, resolve_key_dest
 from .sources import SourceStack
 from .watch import watch
@@ -138,7 +138,7 @@ def _render_is_stale(lr, stack: SourceStack) -> bool:
         return False  # hand-made or foreign target: nothing to compare against
     mo = src.path / lr.key / (target.relative_to(rend_root).as_posix() + ".mo")
     try:
-        return render_hash(mo, stack, src) != lr.render_hash
+        return render_hash(mo, stack, src, lr.key) != lr.render_hash
     except FileNotFoundError:
         return False  # source .mo gone: a path-level issue, not a stale render
 
@@ -211,19 +211,29 @@ def cmd_status(args: argparse.Namespace) -> int:
 
     if not path:
         for key in stack.iter_keys():
+            data = stack.data_for_key(key)
             for abs_src, src in stack.iter_files_for_key(key):
                 if abs_src.suffix != ".mo":
                     continue
                 try:
-                    rendered = render_bytes(abs_src, stack, src)
+                    text = resolve_template_text(abs_src, stack, src)
                 except FileNotFoundError as e:
                     print(f"missing-partial: {e}")
                     issues += 1
                     continue
+                # A data-active key renders variables; a ref that resolves
+                # against no data key renders as an empty string instead of
+                # the intended value — worth a line in the daily digest. The
+                # lint runs on the partial-resolved text, tags intact.
+                if data is not None:
+                    for ref in lint_data_refs(text, data):
+                        print(f"unknown-data-ref: {abs_src}: {ref}")
+                        issues += 1
                 # A *.json.mo must render to parseable JSON; the apply refused
                 # to write an invalid render, so the issue lives only here
                 # (plus the event log) until the source is fixed.
                 if abs_src.with_suffix("").suffix == ".json":
+                    rendered = render_text(abs_src, stack, src, key)
                     try:
                         json.loads(rendered)
                     except ValueError as e:

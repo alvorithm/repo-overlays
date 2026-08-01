@@ -51,7 +51,7 @@ for each (key, dest_root, is_fixed):
 
 ### Key invariants
 
-**Partial resolution** — `_PartialLoader` does not delegate to a third-party Mustache library. `_resolve_partials()` (render.py) applies a compiled regex over `{{>ref}}` tags and calls `SourceStack.resolve_partial()` recursively. This is the only mechanism that can resolve partials across sources.
+**Partial resolution** — `_PartialLoader` does not delegate partial resolution to a third-party library. `_resolve_partials()` (render.py) applies a compiled regex over `{{>ref}}` tags and calls `SourceStack.resolve_partial()` recursively. This is the only mechanism that can resolve partials across sources. For a data-active key (one carrying `data.toml`), chevron then renders variables and sections over the resolved text; partials are never handed to chevron.
 
 **Drift detection** — compares sha256 of the *live file* against sha256 of the *prior render* (at `_rendered/`). If they differ, the agent edited the live file since the last render → diverged. The new render goes to `<live>.proposed`; the `.divergent` marker holds the live file's hash. `repo-overlay promote` clears both.
 
@@ -109,7 +109,7 @@ systemctl --user start repo-overlay.service
 
 **Divergence false positives** — `status` detects diverged destinations by scanning `dest_root.rglob(".divergent")`. If two destination roots share a parent (e.g. one is a subdirectory of the other), a marker from the inner root will appear in the outer root's scan.
 
-**No Mustache variables** — templates support `{{>partial}}` inclusion only. `{{variable}}` and `{{#section}}` tags are passed through verbatim. Add variable substitution to `_resolve_partials` if needed.
+**Variables are key-gated** — templates render `{{>partial}}` only unless the key carries `data.toml`; then chevron renders the partial-resolved text against the parsed TOML (variables, sections, inverted sections, `{{{raw}}}`). No-data keys stay byte-identical to the legacy regex path (regression-tested). The data file resolves like a partial — first source in stack order wins, whole file, never merged, privacy-checked — and never materialises (it is excluded in `_is_junk`). List-of-table values get `first`/`last` injected (reserved keys). `status` lints plain `{{var}}` refs against the data (`unknown-data-ref`), tracking section context like chevron's context stack; sections over absent data legitimately render nothing.
 
 ## Python coding conventions
 

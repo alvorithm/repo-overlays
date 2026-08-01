@@ -20,6 +20,11 @@ same files) into project worktrees, without committing it upstream.
   `apply <path>` (the cd/editor hooks) re-render after a partial or template
   edit even though no path changed, and `status` reports a render that
   nothing re-applied (`stale:` — the watcher was down for that edit).
+- **Data-driven templates**: a key carrying `data.toml` is *data-active* — its
+  `.mo` templates render Mustache variables and sections (chevron) against the
+  parsed TOML; every other key keeps the legacy partial-only contract,
+  byte-identical. `status` lints variable refs that resolve against no data
+  key (`unknown-data-ref:`).
 - **Multi-source composition**: stack several overlay repos (private +
   public/Codeberg-wiki) so collaborators can contribute to one without seeing the
   others.
@@ -31,7 +36,8 @@ same files) into project worktrees, without committing it upstream.
     - *Project overlay*: Key does not start with `_`. Bound to a worktree by git remote slug (`owner_repo`), falling back to the directory basename if the slug doesn't match any source key. Uses `dot_X` → `.X` rewrite at materialisation.
 - **Ignored key**: A top-level directory declared as NOT an overlay key for its source — via `ignore_keys = ["dir", …]` in the source's `config.toml` or an `.overlay-ignore` file at the source root (one name per line, `#` comments, trailing `/` allowed). Lets a source repo carry non-overlay content (docs, staging dirs) without the name accidentally matching a repo under a watched root. Per-source: another source may still provide the same key.
 - **Partial**: `_shared/<name>.md` in any source. Referenced from templates as `{{>_shared/<name>.md}}`.
-- **Template**: Any file in a source ending in `.mo`. Rendered to `_rendered/<key>/<path>` (extension stripped). Non-`.mo` files are symlinked verbatim. A template whose destination ends in `.json` must render to parseable JSON; an unparseable render is refused (status: `invalid-json`). 
+- **Template**: Any file in a source ending in `.mo`. Rendered to `_rendered/<key>/<path>` (extension stripped). Non-`.mo` files are symlinked verbatim. A template whose destination ends in `.json` must render to parseable JSON; an unparseable render is refused (status: `invalid-json`).
+- **Data**: `<key>/data.toml` in any source. A key carrying one is *data-active*: its `.mo` templates render with full Mustache (variables `{{name}}`, sections `{{#list}}…{{/list}}`, inverted `{{^x}}`, raw `{{{x}}}`) against the parsed TOML. A key without one keeps the legacy contract: only `{{>partial}}` resolves and every other `{{…}}` passes through verbatim. The file resolves like a partial — first source in stack order wins, whole file, never merged, privacy-checked — and is never materialised. List-of-table values get `first`/`last` booleans injected (reserved keys) so templates can join items with commas. 
 - **Live file**: The symlink at the destination that the agent reads/writes.
 - **Drifted file**: A live file no longer matches a fresh render of its source. 
 
@@ -152,7 +158,7 @@ A Markdown link in an overlay file is read in (up to) three places: the source r
 - target `<target>/…` — agent reading the live symlink
 - Codeberg `https://codeberg.org/<user>/<overlay>/src/branch/main/<key>/…`: collaborator on web
 
-repo-overlays mirrors `<overlay>/<key>/<rel>` to `<target>/<rel>` (modulo `dot_X` → `.X`). The *prefix* differs by context but the *suffix inside the key* is identical, so most relative links resolve to the right file in all three views with no extra effort. There is no `{{base_path}}` template variable — and no need for one — because the value would have to differ per context, but a template is rendered only once.
+repo-overlays mirrors `<overlay>/<key>/<rel>` to `<target>/<rel>` (modulo `dot_X` → `.X`). The *prefix* differs by context but the *suffix inside the key* is identical, so most relative links resolve to the right file in all three views with no extra effort. There is no `{{base_path}}` template variable — the value would have to differ per destination, and a template is rendered only once, shared by every destination of the key. Data-driven values are key-scoped (`data.toml`) for exactly that reason: the key is the shared scope.
 
 
 #### Pattern 1 — same-key references (just works)

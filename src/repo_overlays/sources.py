@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import sys
+import tomllib
 from pathlib import Path
 from typing import Iterator
 
@@ -24,10 +25,17 @@ _JUNK_DIRS = frozenset({"__pycache__", ".ruff_cache", ".pytest_cache", ".mypy_ca
 #: declaration, never materialised.
 OWN_MARKER = ".overlay-own"
 
+#: Per-key template data file. Its presence makes the key *data-active* (see
+#: ``data_for_key``); it is a declaration, never materialised.
+DATA_FILENAME = "data.toml"
+
 
 def _is_junk(rel: Path) -> bool:
     """True for editor leftovers, tool caches and markers, which never materialise."""
     if rel.name == OWN_MARKER:
+        return True
+    # Only the key-root data.toml is the contract; a nested one is an ordinary file.
+    if rel.name == DATA_FILENAME and len(rel.parts) == 1:
         return True
     if rel.name.endswith(_BACKUP_SUFFIXES) or rel.name.startswith(".#"):
         return True
@@ -159,6 +167,45 @@ class SourceStack:
                 return candidate
         raise FileNotFoundError(f"Partial {ref!r} not found in any source")
 
+    def resolve_data(
+        self,
+        key: str,
+        requesting_source: SourceConfig | None = None,
+    ) -> Path | None:
+        """Return the data.toml that makes *key* data-active, or None.
+
+        First source in stack order that has ``<key>/data.toml`` wins — whole
+        file, never merged, exactly like partials and file overrides. Raises
+        PermissionError if a public source requests data from a private one.
+        """
+        for src in self._config.sources:
+            if key in src.ignore_keys:
+                continue
+            candidate = src.path / key / DATA_FILENAME
+            if candidate.exists():
+                self._check_privacy(requesting_source, src, f"{key}/{DATA_FILENAME}")
+                return candidate
+        return None
+
+    def data_for_key(
+        self,
+        key: str,
+        requesting_source: SourceConfig | None = None,
+    ) -> dict | None:
+        """Return the parsed, position-annotated template data for *key*, or None.
+
+        None means the key is *not* data-active: its templates render with the
+        legacy partial-only path and every ``{{variable}}``/``{{#section}}``
+        stays verbatim. The file's presence is the whole gate.
+        """
+        path = self.resolve_data(key, requesting_source)
+        if path is None:
+            return None
+        with path.open("rb") as f:
+            data = tomllib.load(f)
+        _inject_positions(data)
+        return data
+
     def source_by_name(self, name: str) -> SourceConfig:
         return self._source_by_name(name)
 
@@ -182,3 +229,25 @@ class SourceStack:
                 f"Public source {requesting.name!r} references private partial {ref!r} "
                 f"from source {providing.name!r}"
             )
+
+
+def _inject_positions(data: dict) -> None:
+    """Add ``first``/``last`` booleans to every list-of-table value.
+
+    Mustache has no index or join; a template joins items with
+    ``{{^first}}``/``{{^last}}`` inverted sections instead. The keys are
+    reserved: an existing value in the data file is kept.
+    """
+    def walk(node: object) -> None:
+        if isinstance(node, dict):
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            if node and all(isinstance(item, dict) for item in node):
+                for index, item in enumerate(node):
+                    item.setdefault("first", index == 0)
+                    item.setdefault("last", index == len(node) - 1)
+            for item in node:
+                walk(item)
+
+    walk(data)

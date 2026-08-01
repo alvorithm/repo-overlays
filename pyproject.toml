@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Compose Markdown agent guidance into project worktrees without committing upstream"
 requires-python = ">=3.11"
 dependencies = [
+    "chevron>=0.14.0",
     "inotify-simple",
     "tomli-w",
 ]

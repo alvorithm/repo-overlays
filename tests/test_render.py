@@ -235,3 +235,154 @@ def test_invalid_json_render_is_refused(tmp: Path) -> None:
     status = render_template(src=template, rendered_dest=rendered, stack=stack)
     assert status == "invalid"
     assert not rendered.exists(), "an invalid render must not be written"
+
+
+# ── data-driven templates (key-gated by data.toml) ──────────────────────────
+
+
+def test_no_data_key_keeps_variables_verbatim(tmp: Path) -> None:
+    """A key without data.toml is not data-active: {{var}} and {{#section}}
+    pass through byte-identically (the documented legacy contract)."""
+    src_dir = make_source(tmp, "src1")
+    key_dir = src_dir / "overlay"
+    key_dir.mkdir()
+    template = key_dir / "CLAUDE.md.mo"
+    template.write_text("Hi {{name}}!{{#list}}x{{/list}}")
+
+    rendered = tmp / "rendered" / "CLAUDE.md"
+    _, stack = _stack_from_dirs(tmp, (src_dir, "src1", False))
+    status = render_template(src=template, rendered_dest=rendered, stack=stack, key="overlay")
+    assert status == "ok"
+    assert rendered.read_text() == "Hi {{name}}!{{#list}}x{{/list}}"
+
+
+def test_data_key_renders_sections_and_raw_json(tmp: Path) -> None:
+    """A key with data.toml gets full Mustache: sections iterate, first/last
+    join members with commas, {{{raw}}} emits unescaped JSON fragments."""
+    import json as _json
+
+    src_dir = make_source(tmp, "src1")
+    key_dir = src_dir / "overlay"
+    key_dir.mkdir()
+    (key_dir / "data.toml").write_text(
+        "[[servers]]\n"
+        'name = "penpot"\n'
+        'command = "npx"\n'
+        'args = \'["-y", "mcp-remote"]\'\n\n'
+        "[[servers]]\n"
+        'name = "playwright"\n'
+        'command = "npx"\n'
+        'args = \'["@playwright/mcp@latest"]\'\n'
+    )
+    template = key_dir / "mcp.json.mo"
+    template.write_text(
+        '{\n  "mcpServers": {\n'
+        "{{#servers}}\n"
+        '    "{{name}}": {\n'
+        '      "command": "{{command}}",\n'
+        '      "args": {{{args}}}\n'
+        "    }{{^last}},{{/last}}\n"
+        "{{/servers}}\n"
+        "  }\n}\n"
+    )
+
+    rendered = tmp / "rendered" / "mcp.json"
+    _, stack = _stack_from_dirs(tmp, (src_dir, "src1", False))
+    render_template(src=template, rendered_dest=rendered, stack=stack, key="overlay")
+    out = rendered.read_text()
+    parsed = _json.loads(out)  # valid JSON, so the comma joining worked
+    assert list(parsed["mcpServers"]) == ["penpot", "playwright"]
+    assert parsed["mcpServers"]["penpot"]["args"] == ["-y", "mcp-remote"]
+    assert out.count('\n    "') == 2, out
+
+
+def test_first_last_injected_into_table_lists(tmp: Path) -> None:
+    """List-of-table data gets first/last booleans (reserved keys) for joining."""
+    src_dir = make_source(tmp, "src1")
+    key_dir = src_dir / "overlay"
+    key_dir.mkdir()
+    (key_dir / "data.toml").write_text(
+        "[[items]]\nname = 'a'\n[[items]]\nname = 'b'\n[[items]]\nname = 'c'\n"
+    )
+    _, stack = _stack_from_dirs(tmp, (src_dir, "src1", False))
+    data = stack.data_for_key("overlay")
+    assert data is not None
+    assert data["items"][0]["first"] is True and data["items"][0]["last"] is False
+    assert data["items"][1]["first"] is False and data["items"][1]["last"] is False
+    assert data["items"][2]["first"] is False and data["items"][2]["last"] is True
+
+
+def test_unknown_variable_renders_empty(tmp: Path) -> None:
+    """Mustache semantics: a missing name renders as an empty string (the
+    status lint is what makes that visible)."""
+    src_dir = make_source(tmp, "src1")
+    key_dir = src_dir / "overlay"
+    key_dir.mkdir()
+    (key_dir / "data.toml").write_text('name = "x"\n')
+    template = key_dir / "CLAUDE.md.mo"
+    template.write_text("{{name}}|{{typo}}")
+
+    rendered = tmp / "rendered" / "CLAUDE.md"
+    _, stack = _stack_from_dirs(tmp, (src_dir, "src1", False))
+    render_template(src=template, rendered_dest=rendered, stack=stack, key="overlay")
+    assert rendered.read_text() == "x|"
+
+
+def test_data_first_source_wins(tmp: Path) -> None:
+    """The data file resolves like a partial: first source in stack order."""
+    first = make_source(tmp, "first")
+    k1 = first / "k"
+    k1.mkdir()
+    (k1 / "data.toml").write_text("name = 'first'\n")
+    second = make_source(tmp, "second")
+    k2 = second / "k"
+    k2.mkdir()
+    (k2 / "data.toml").write_text("name = 'second'\n")
+
+    _, stack = _stack_from_dirs(tmp, (first, "first", False), (second, "second", False))
+    assert stack.data_for_key("k")["name"] == "first"
+
+
+def test_data_privacy_violation_raises(tmp: Path) -> None:
+    """A public source template must not render with data from a private source."""
+    from repo_overlays.config import AppConfig, SourceConfig
+    from repo_overlays.sources import SourceStack
+
+    private = make_source(tmp, "priv")
+    priv_key = private / "myproject"
+    priv_key.mkdir()
+    (priv_key / "data.toml").write_text("name = 'secret'\n")
+    public = make_source(tmp, "pub")
+    pub_key = public / "myproject"
+    pub_key.mkdir()
+    template = pub_key / "CLAUDE.md.mo"
+    template.write_text("{{name}}\n")
+
+    priv_cfg = SourceConfig(name="priv", path=private, private=True)
+    pub_cfg = SourceConfig(name="pub", path=public, private=False)
+    stack = SourceStack(AppConfig(sources=[priv_cfg, pub_cfg]))
+    rendered = tmp / "rendered" / "CLAUDE.md"
+    with pytest.raises(PermissionError):
+        render_template(src=template, rendered_dest=rendered, stack=stack, requesting=pub_cfg, key="myproject")
+
+
+def test_lint_data_refs_tracks_sections(tmp: Path) -> None:
+    """The status lint knows section context: refs inside {{#servers}} resolve
+    against the section's item keys; plain unknown refs are reported."""
+    from repo_overlays.render import lint_data_refs
+
+    data = {
+        "servers": [{"name": "penpot", "command": "npx", "first": True, "last": False}],
+        "mode": "pro",
+    }
+    text = (
+        "{{mode}} {{typo}} "
+        "{{#servers}}{{name}} {{command}}{{/servers}} "
+        "{{^last}},{{/last}} {{{raw}}} {{.}} {{&amp}} {{!c}}"
+    )
+    unknown = lint_data_refs(text, data)
+    assert unknown == ["typo", "amp"], unknown
+
+    # triple-stache and dotted names that resolve are exempt
+    assert lint_data_refs("{{{args}}} {{nested.deep}}", {"nested": {"deep": 1}}) == []
+    assert lint_data_refs("{{nested.missing}}", {"nested": {"deep": 1}}) == ["nested.missing"]

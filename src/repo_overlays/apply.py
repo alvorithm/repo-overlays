@@ -350,6 +350,7 @@ def _apply_key(
                 stack=stack,
                 requesting=src,
                 live_dest=final_dest if final_dest.exists() and not final_dest.is_symlink() else None,
+                key=key,
             )
             if status == "diverged":
                 print(
@@ -371,7 +372,7 @@ def _apply_key(
                             source=src.name,
                             key=key,
                             target=os.readlink(final_dest),
-                            render_hash=render_hash(abs_src, stack, src),
+                            render_hash=render_hash(abs_src, stack, src, key),
                         )
                     )
                 continue
@@ -411,7 +412,7 @@ def _apply_key(
                 source=src.name,
                 key=key,
                 target=str(link_target),
-                render_hash=render_hash(abs_src, stack, src) if rel.suffix == ".mo" else None,
+                render_hash=render_hash(abs_src, stack, src, key) if rel.suffix == ".mo" else None,
             )
         )
 
@@ -458,7 +459,7 @@ def _already_applied(dest_root: Path, key: str, is_fixed: bool, stack: SourceSta
         # render, so the path-set comparison alone would miss it and the live
         # file would go stale until something forced a full apply.
         if rel.suffix == ".mo":
-            planned_hashes[record_path] = render_hash(abs_src, stack, src)
+            planned_hashes[record_path] = render_hash(abs_src, stack, src, key)
 
     recorded = [lr for lr in manifest.links if lr.key == key]
     # A diverged template produces no link but is accounted for: its path sits
