@@ -85,6 +85,40 @@ def test_directory_rename_is_recorded_as_a_pair(tmp: Path, monkeypatch: pytest.M
     assert line[3] == str(tmp / "Overlays" / "defaults")
 
 
+def test_created_directory_gets_a_watch(tmp: Path) -> None:
+    """A directory created after startup is watched immediately.
+
+    The initial watch set is a one-shot walk, so a new ``_shared/mcp/`` or a
+    new overlay key would otherwise be invisible to inotify until the watcher
+    restarted — partial edits inside it would never re-apply.
+    """
+    from repo_overlays.watch import _IN_CREATE, _IN_ISDIR, _watch_created_dir
+
+    src = tmp / "Overlays" / "defaults"
+    src.mkdir(parents=True)
+    (src / "_shared").mkdir()  # the event follows the on-disk mkdir
+    wd_paths = {1: src}
+
+    class _Inotify:
+        def __init__(self) -> None:
+            self.watched: list[tuple[str, int]] = []
+
+        def add_watch(self, path: str, mask: int) -> int:
+            self.watched.append((path, mask))
+            return len(self.watched) + 1
+
+    ino = _Inotify()
+    _watch_created_dir(_Event(1, _IN_CREATE | _IN_ISDIR, 0, "_shared"), wd_paths, ino)
+    assert wd_paths[2] == src / "_shared"
+    assert ino.watched == [(str(src / "_shared"), _WATCH_FLAGS)]
+
+    # File creates and ignored dirs (git dirs, render output) must not add watches.
+    _watch_created_dir(_Event(1, _IN_CREATE, 0, "note.md"), wd_paths, ino)
+    _watch_created_dir(_Event(1, _IN_CREATE | _IN_ISDIR, 0, "_rendered"), wd_paths, ino)
+    _watch_created_dir(_Event(1, _IN_CREATE | _IN_ISDIR, 0, ".git"), wd_paths, ino)
+    assert len(ino.watched) == 1, ino.watched
+
+
 def test_file_moves_and_unpaired_moves_are_not_recorded(tmp: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Only completed *directory* moves are events; editor churn is not."""
     from repo_overlays.events import log_path

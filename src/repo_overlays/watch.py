@@ -25,6 +25,9 @@ _WATCH_FLAGS = (
 _IN_MOVED_FROM = 0x00000040
 _IN_MOVED_TO = 0x00000080
 _IN_ISDIR = 0x40000000
+# A directory created after startup (a new _shared/mcp/, a new overlay key)
+# needs a watch of its own before edits inside it can trigger anything.
+_IN_CREATE = 0x00000100
 
 _DEBOUNCE_S = 0.2
 _EXCLUDE_PARTS = frozenset([".git", "_rendered", "__pycache__"])
@@ -61,6 +64,28 @@ def _collect_watch_paths(config: AppConfig) -> list[Path]:
     if top.exists():
         paths.append(top.parent)
     return paths
+
+
+def _watch_created_dir(event, wd_paths: dict[int, Path], inotify) -> None:
+    """Watch a directory created after startup, so edits inside it re-apply.
+
+    The initial watch set is a one-shot walk; a directory that appears later
+    (a new ``_shared/`` subtree, a new overlay key) is invisible to inotify
+    until the watcher restarts. Watching it as it appears keeps partial edits
+    in new directories on the re-apply path without a service restart.
+    """
+    if not (event.mask & _IN_ISDIR) or not (event.mask & (_IN_CREATE | _IN_MOVED_TO)):
+        return
+    parent = wd_paths.get(event.wd)
+    if parent is None:
+        return
+    new_dir = parent / event.name
+    if _should_ignore(str(new_dir)) or not new_dir.is_dir():
+        return
+    try:
+        wd_paths[inotify.add_watch(str(new_dir), _WATCH_FLAGS)] = new_dir
+    except OSError:
+        pass
 
 
 def _note_rename(event, wd_paths: dict[int, Path], pending: dict[int, Path]) -> None:
@@ -120,6 +145,7 @@ def watch(config: AppConfig, once: bool = False) -> None:
         events = inotify.read(timeout=int(_DEBOUNCE_S * 1000))
         for e in events:
             _note_rename(e, wd_paths, pending_moves)
+            _watch_created_dir(e, wd_paths, inotify)
         if events:
             relevant = [e for e in events if not _should_ignore(e.name)]
             if relevant:
