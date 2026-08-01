@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from .apply import apply_all, apply_one, tracked_links
 from .config import TOP_LEVEL_CONFIG, AppConfig, load_config
 from .manifest import divergent_markers, read as read_manifest
 from .promote import promote
+from .render import render_bytes, render_hash
 from .resolve import iter_all_destinations, resolve_key_dest
 from .sources import SourceStack
 from .watch import watch
@@ -119,6 +121,28 @@ def cmd_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def _render_is_stale(lr, stack: SourceStack) -> bool:
+    """True when the render behind a recorded *.mo link is no longer current.
+
+    The recorded ``render_hash`` was computed from the template plus its
+    transitive partials at apply time; re-hashing the same inputs and seeing a
+    different value means a source changed and no apply re-rendered since.
+    """
+    try:
+        src = stack.source_by_name(lr.source)
+    except KeyError:
+        return False  # source vanished: the link will be reported broken/pruned
+    target = Path(lr.target)
+    rend_root = src.path / "_rendered" / lr.key
+    if not target.is_relative_to(rend_root):
+        return False  # hand-made or foreign target: nothing to compare against
+    mo = src.path / lr.key / (target.relative_to(rend_root).as_posix() + ".mo")
+    try:
+        return render_hash(mo, stack, src) != lr.render_hash
+    except FileNotFoundError:
+        return False  # source .mo gone: a path-level issue, not a stale render
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     """Report broken links, drift and missing partials.
 
@@ -129,6 +153,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     config = _load(args)
     path = getattr(args, "path", None)
     issues = 0
+    stack = SourceStack(config)
 
     if path:
         resolved = resolve_key_dest(Path(path).resolve(), config)
@@ -155,6 +180,13 @@ def cmd_status(args: argparse.Namespace) -> int:
             elif link.exists() and not link.is_symlink():
                 print(f"regular-file: {link}")
                 issues += 1
+            elif not path and lr.render_hash is not None and _render_is_stale(lr, stack):
+                # The source changed after the last apply and nothing
+                # re-rendered: the live file carries old content. Usually the
+                # watcher re-applies within seconds, so a report here means it
+                # was down for that edit (or never saw it).
+                print(f"stale: {link}")
+                issues += 1
 
         # A tracked overlay link is a one-way trap: info/exclude only hides
         # untracked paths, so it stays tracked until untracked by hand.
@@ -178,17 +210,24 @@ def cmd_status(args: argparse.Namespace) -> int:
             issues += 1
 
     if not path:
-        stack = SourceStack(config)
         for key in stack.iter_keys():
             for abs_src, src in stack.iter_files_for_key(key):
-                if abs_src.suffix == ".mo":
+                if abs_src.suffix != ".mo":
+                    continue
+                try:
+                    rendered = render_bytes(abs_src, stack, src)
+                except FileNotFoundError as e:
+                    print(f"missing-partial: {e}")
+                    issues += 1
+                    continue
+                # A *.json.mo must render to parseable JSON; the apply refused
+                # to write an invalid render, so the issue lives only here
+                # (plus the event log) until the source is fixed.
+                if abs_src.with_suffix("").suffix == ".json":
                     try:
-                        from .render import _resolve_partials, _PartialLoader
-                        loader = _PartialLoader(stack, src)
-                        template = abs_src.read_text()
-                        _resolve_partials(template, loader)
-                    except FileNotFoundError as e:
-                        print(f"missing-partial: {e}")
+                        json.loads(rendered)
+                    except ValueError as e:
+                        print(f"invalid-json: {abs_src}: {e}")
                         issues += 1
 
     if issues == 0 and not path:

@@ -11,6 +11,7 @@ Features covered (USAGE.md §2, §4.2):
 
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 
@@ -202,3 +203,35 @@ def test_drift_is_logged_for_later_inspection(tmp: Path, monkeypatch) -> None:
     assert log.exists(), "drift must be recorded"
     line = log.read_text().strip()
     assert "drift" in line and str(live) in line
+
+
+def test_json_template_renders_ok(tmp: Path) -> None:
+    """A *.json.mo that renders parseable JSON writes normally."""
+    src_dir = make_source(tmp, "src1")
+    (src_dir / "_shared" / "servers.json").write_text('"penpot": {"port": 4401}\n')
+    template = src_dir / "overlay" / "mcp.json.mo"
+    template.parent.mkdir()
+    template.write_text('{\n  "mcpServers": {\n{{>_shared/servers.json}}\n  }\n}\n')
+
+    rendered = tmp / "rendered" / "mcp.json"
+    _, stack = _stack_from_dirs(tmp, (src_dir, "src1", False))
+
+    assert render_template(src=template, rendered_dest=rendered, stack=stack) == "ok"
+    assert json.loads(rendered.read_text())["mcpServers"]["penpot"]["port"] == 4401
+
+
+def test_invalid_json_render_is_refused(tmp: Path) -> None:
+    """A *.json.mo that renders unparseable JSON returns 'invalid' and writes
+    nothing: a broken partial must never ship garbage to a harness."""
+    src_dir = make_source(tmp, "src1")
+    (src_dir / "_shared" / "servers.json").write_text('"penpot": {"port": 4401},\n')
+    template = src_dir / "overlay" / "mcp.json.mo"
+    template.parent.mkdir()
+    template.write_text('{\n  "mcpServers": {\n{{>_shared/servers.json}}\n  }\n}\n')
+
+    rendered = tmp / "rendered" / "mcp.json"
+    _, stack = _stack_from_dirs(tmp, (src_dir, "src1", False))
+
+    status = render_template(src=template, rendered_dest=rendered, stack=stack)
+    assert status == "invalid"
+    assert not rendered.exists(), "an invalid render must not be written"

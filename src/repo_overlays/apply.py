@@ -18,7 +18,7 @@ from .manifest import (
     read,
     write,
 )
-from .render import render_template
+from .render import render_hash, render_template
 from .resolve import iter_all_destinations, resolve_key_dest
 from .sources import SourceStack
 
@@ -358,6 +358,23 @@ def _apply_key(
                 )
                 drift.append(str(dest_rel))
                 continue
+            if status == "invalid":
+                # The render is garbage; nothing was written, so the previous
+                # (valid) render and its live symlink stay in service. Re-record
+                # the existing link with the fresh hash, or the next apply
+                # would prune it and the harness would silently lose the
+                # server/config it was using.
+                if final_dest.is_symlink():
+                    links.append(
+                        LinkRecord(
+                            path=_record_path(dest_root, final_dest),
+                            source=src.name,
+                            key=key,
+                            target=os.readlink(final_dest),
+                            render_hash=render_hash(abs_src, stack, src),
+                        )
+                    )
+                continue
             link_target = rendered_dest
         else:
             link_target = abs_src
@@ -394,6 +411,7 @@ def _apply_key(
                 source=src.name,
                 key=key,
                 target=str(link_target),
+                render_hash=render_hash(abs_src, stack, src) if rel.suffix == ".mo" else None,
             )
         )
 
@@ -428,12 +446,19 @@ def _already_applied(dest_root: Path, key: str, is_fixed: bool, stack: SourceSta
     # Every destination path a fresh apply would place. report_overrides is off:
     # this runs on every cd, and the override warnings are the real apply's job.
     planned: set[str] = set()
+    planned_hashes: dict[str, str] = {}
     for abs_src, src in stack.iter_files_for_key(key, report_overrides=False):
         rel = abs_src.relative_to(src.path / key)
         final_dest = _planned_dest(rel, dest_root, is_fixed)
         if final_dest is None:
             continue  # git-dir file in a non-git dir: apply skips it too
-        planned.add(_record_path(dest_root, final_dest))
+        record_path = _record_path(dest_root, final_dest)
+        planned.add(record_path)
+        # Content hashes: a partial or template edit changes no path, only the
+        # render, so the path-set comparison alone would miss it and the live
+        # file would go stale until something forced a full apply.
+        if rel.suffix == ".mo":
+            planned_hashes[record_path] = render_hash(abs_src, stack, src)
 
     recorded = [lr for lr in manifest.links if lr.key == key]
     # A diverged template produces no link but is accounted for: its path sits
@@ -450,6 +475,10 @@ def _already_applied(dest_root: Path, key: str, is_fixed: bool, stack: SourceSta
             return False
         # Resolve both target and recorded target so we compare real paths.
         if str(link.resolve()) != str(Path(lr.target).resolve()):
+            return False
+        # A recorded hash that is missing (pre-hash manifest) or stale means
+        # the live file is not current; a full apply backfills/re-renders.
+        if lr.path in planned_hashes and lr.render_hash != planned_hashes[lr.path]:
             return False
 
     return _exclude_up_to_date(

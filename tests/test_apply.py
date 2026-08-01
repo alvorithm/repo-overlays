@@ -13,8 +13,10 @@ Features covered (USAGE.md §3, §4, §5, §6, §7):
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -1054,6 +1056,154 @@ def test_already_applied_ignores_standing_drift(tmp: Path) -> None:
 
     # With drift standing and no source change, the fast path holds.
     assert _already_applied(project, "myproject", False, SourceStack(config)) is True
+
+
+def test_already_applied_false_after_partial_edit(tmp: Path) -> None:
+    """The content-hash gap: a partial edit changes no path, so the old
+    path-set check reported "applied" and `apply <path>` (mise/emacs hooks)
+    never re-rendered. The recorded render hash must catch it: the fast path
+    goes False and a full apply re-renders the live file.
+    """
+    from repo_overlays.apply import _already_applied
+    from repo_overlays.sources import SourceStack
+
+    src_dir = make_source(tmp, "personal")
+    project = tmp / "myproject"
+    _git_init(project)
+    overlay = src_dir / "myproject"
+    overlay.mkdir(parents=True)
+    (src_dir / "_shared" / "voice.md").write_text("v1\n")
+    (overlay / "CLAUDE.md.mo").write_text("{{>_shared/voice.md}}")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+    apply_one(project, config)
+    assert (project / "CLAUDE.md").read_text() == "v1\n"
+
+    # Edit the partial only: same paths, different content.
+    (src_dir / "_shared" / "voice.md").write_text("v2\n")
+    assert _already_applied(project, "myproject", False, SourceStack(config)) is False
+
+    assert apply_one(project, config) is True
+    assert (project / "CLAUDE.md").read_text() == "v2\n"
+
+
+def test_old_manifest_without_render_hash_reapplies_once(tmp: Path) -> None:
+    """Manifests written before the hash field existed carry render_hash=None;
+    the first apply after the upgrade must re-render and backfill the hash.
+    """
+    from repo_overlays.apply import _already_applied
+    from repo_overlays.manifest import LinkRecord, write as write_manifest
+    from repo_overlays.sources import SourceStack
+
+    src_dir = make_source(tmp, "personal")
+    project = tmp / "myproject"
+    _git_init(project)
+    overlay = src_dir / "myproject"
+    overlay.mkdir(parents=True)
+    (overlay / "CLAUDE.md.mo").write_text("v1\n")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+    apply_one(project, config)
+
+    # Simulate a pre-hash manifest: drop the field from every record.
+    data = tomllib.loads((project / MANIFEST_FILENAME).read_text())
+    records = [LinkRecord(**{k: v for k, v in lr.items() if k != "render_hash"})
+               for lr in data["link"]]
+    write_manifest(project, records, data["drift"])
+
+    assert _already_applied(project, "myproject", False, SourceStack(config)) is False
+    assert apply_one(project, config) is True
+    assert all(lr.render_hash is not None for lr in read_manifest(project).links)
+
+
+def test_invalid_json_render_keeps_last_good_link(tmp: Path) -> None:
+    """A *.json.mo that stops rendering valid JSON must not break the live
+    file: the last good render stays in service, the link is re-recorded with
+    the fresh hash so the fast path keeps holding, and fixing the source
+    re-renders.
+    """
+    from repo_overlays.apply import _already_applied
+    from repo_overlays.sources import SourceStack
+
+    src_dir = make_source(tmp, "personal")
+    project = tmp / "myproject"
+    _git_init(project)
+    overlay = src_dir / "myproject"
+    overlay.mkdir(parents=True)
+    (src_dir / "_shared" / "servers.json").write_text('"penpot": {"port": 4401}\n')
+    (overlay / "mcp.json.mo").write_text(
+        '{\n  "mcpServers": {\n{{>_shared/servers.json}}\n  }\n}\n'
+    )
+
+    config = _config(SourceConfig(name="personal", path=src_dir, private=True))
+    apply_one(project, config)
+    live = project / "mcp.json"
+    assert json.loads(live.read_text())["mcpServers"]["penpot"]["port"] == 4401
+
+    # Break the fragment: the render now has a dangling comma → invalid JSON.
+    (src_dir / "_shared" / "servers.json").write_text('"penpot": {"port": 4401},\n')
+    assert apply_one(project, config) is True
+
+    # Last-good content survives; the record is re-recorded with the new hash.
+    assert live.is_symlink()
+    assert json.loads(live.read_text())["mcpServers"]["penpot"]["port"] == 4401
+    assert _already_applied(project, "myproject", False, SourceStack(config)) is True
+
+    # Fixing the source re-renders and restores.
+    (src_dir / "_shared" / "servers.json").write_text('"penpot": {"port": 4402}\n')
+    assert apply_one(project, config) is True
+    assert json.loads(live.read_text())["mcpServers"]["penpot"]["port"] == 4402
+
+
+def test_status_reports_stale_render(tmp: Path, capsys) -> None:
+    """status flags a live link whose render is no longer current: the source
+    changed after the last apply and nothing re-rendered (watcher down)."""
+    import argparse
+    from repo_overlays.cli import cmd_status
+
+    dest = tmp / "cfg"
+    src_dir = make_source(tmp, "personal", targets={"_cfg": str(dest)})
+    (src_dir / "_cfg").mkdir(exist_ok=True)
+    (src_dir / "_shared" / "servers.json").write_text('"penpot": {"port": 4401}\n')
+    (src_dir / "_cfg" / "mcp.json.mo").write_text(
+        '{\n  "mcpServers": {\n{{>_shared/servers.json}}\n  }\n}\n'
+    )
+    top = make_top_config(tmp, [{"name": "personal", "path": str(src_dir)}])
+
+    config = _config(SourceConfig(
+        name="personal", path=src_dir, private=True, targets={"_cfg": dest}
+    ))
+    apply_one(dest, config)
+
+    # Edit the partial, do not re-apply: the live render is now stale.
+    (src_dir / "_shared" / "servers.json").write_text('"penpot": {"port": 4402}\n')
+    rc = cmd_status(argparse.Namespace(config=str(top), path=None))
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "stale:" in out
+    assert "All overlays clean." not in out
+
+
+def test_status_reports_invalid_json_template(tmp: Path, capsys) -> None:
+    """status flags a *.json.mo whose render does not parse, which apply
+    refused to write — the issue is only visible here and in the event log."""
+    import argparse
+    from repo_overlays.cli import cmd_status
+
+    dest = tmp / "cfg"
+    dest.mkdir(parents=True)
+    src_dir = make_source(tmp, "personal", targets={"_cfg": str(dest)})
+    (src_dir / "_cfg").mkdir(exist_ok=True)
+    (src_dir / "_shared" / "servers.json").write_text('"penpot": {"port": 4401},\n')
+    (src_dir / "_cfg" / "mcp.json.mo").write_text(
+        '{\n  "mcpServers": {\n{{>_shared/servers.json}}\n  }\n}\n'
+    )
+    top = make_top_config(tmp, [{"name": "personal", "path": str(src_dir)}])
+
+    rc = cmd_status(argparse.Namespace(config=str(top), path=None))
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "invalid-json:" in out
 
 
 def test_status_reports_no_destinations_instead_of_clean(tmp: Path, capsys) -> None:

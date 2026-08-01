@@ -22,6 +22,10 @@ class LinkRecord:
     source: str         # source name
     key: str            # overlay key
     target: str         # absolute path of symlink target
+    #: SHA-256 of the render output behind a *.mo link (None for literal
+    #: files). Lets _already_applied detect content changes — a partial edit
+    #: alters no path, only this hash — without re-rendering on every cd.
+    render_hash: str | None = None
 
 
 @dataclass
@@ -53,6 +57,7 @@ def read(dest_root: Path) -> Manifest:
             source=lr["source"],
             key=lr["key"],
             target=lr["target"],
+            render_hash=lr.get("render_hash"),
         )
         for lr in data.get("link", [])
     ]
@@ -72,6 +77,7 @@ def write(dest_root: Path, links: list[LinkRecord], drift: list[str] | None = No
                 "source": lr.source,
                 "key": lr.key,
                 "target": lr.target,
+                **({"render_hash": lr.render_hash} if lr.render_hash is not None else {}),
             }
             for lr in links
         ],

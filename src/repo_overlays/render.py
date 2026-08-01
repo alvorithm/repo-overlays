@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Literal
 
@@ -13,7 +15,7 @@ from .events import record
 from .sources import SourceStack, SourceConfig
 
 
-RenderStatus = Literal["ok", "diverged", "unchanged"]
+RenderStatus = Literal["ok", "diverged", "unchanged", "invalid"]
 
 
 class _PartialLoader:
@@ -30,6 +32,29 @@ class _PartialLoader:
 
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def render_bytes(
+    src: Path,
+    stack: SourceStack,
+    requesting: SourceConfig | None = None,
+) -> bytes:
+    """Resolve a template's partials to the exact bytes a render would write.
+
+    Pure (no filesystem writes); used for content hashing in the manifest so
+    an apply can tell whether a live file is current without re-rendering.
+    """
+    loader = _PartialLoader(stack, requesting)
+    return _resolve_partials(src.read_text(), loader).encode()
+
+
+def render_hash(
+    src: Path,
+    stack: SourceStack,
+    requesting: SourceConfig | None = None,
+) -> str:
+    """SHA-256 of the render output for *src* (see render_bytes)."""
+    return _sha256(render_bytes(src, stack, requesting))
 
 
 def render_template(
@@ -52,11 +77,22 @@ def render_template(
         "ok"       — rendered and written (first render or re-render of unchanged live file).
         "unchanged" — rendered content identical to what was already at rendered_dest.
         "diverged"  — live file has been externally modified; .proposed written.
+        "invalid"   — a *.json.mo rendered to unparseable JSON; nothing written.
     """
-    loader = _PartialLoader(stack, requesting)
-    template_text = src.read_text()
-    rendered = _resolve_partials(template_text, loader)
-    rendered_bytes = rendered.encode()
+    rendered_bytes = render_bytes(src, stack, requesting)
+
+    # A template that produces a *.json destination must render to parseable
+    # JSON, or the harness reading the live file breaks (dirge would fall back
+    # to its Exa default, omp/pi to no servers). Refuse to write anything —
+    # the previous render stays live and last-good — and record the event so
+    # `repo-overlay status` and the drift digest can surface it.
+    if rendered_dest.suffix == ".json":
+        try:
+            json.loads(rendered_bytes)
+        except ValueError as e:
+            print(f"  invalid-json: {rendered_dest}: {e}", file=sys.stderr)
+            record("invalid-json", str(rendered_dest))
+            return "invalid"
 
     rendered_dest.parent.mkdir(parents=True, exist_ok=True)
 

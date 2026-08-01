@@ -14,6 +14,12 @@ same files) into project worktrees, without committing it upstream.
 - **Drift detection**: when an agent edits a live file, the next apply refuses to
   overwrite, saves a `.proposed` render, and notifies you. Edits are reconciled with an
   interactive promote step.
+- **Content-change detection**: a `*.json.mo` render is validated before it is
+  written — unparseable JSON is refused, the last good render stays live, and
+  `status` reports it as `invalid-json`. A per-link render hash makes
+  `apply <path>` (the cd/editor hooks) re-render after a partial or template
+  edit even though no path changed, and `status` reports a render that
+  nothing re-applied (`stale:` — the watcher was down for that edit).
 - **Multi-source composition**: stack several overlay repos (private +
   public/Codeberg-wiki) so collaborators can contribute to one without seeing the
   others.
@@ -25,7 +31,7 @@ same files) into project worktrees, without committing it upstream.
     - *Project overlay*: Key does not start with `_`. Bound to a worktree by git remote slug (`owner_repo`), falling back to the directory basename if the slug doesn't match any source key. Uses `dot_X` → `.X` rewrite at materialisation.
 - **Ignored key**: A top-level directory declared as NOT an overlay key for its source — via `ignore_keys = ["dir", …]` in the source's `config.toml` or an `.overlay-ignore` file at the source root (one name per line, `#` comments, trailing `/` allowed). Lets a source repo carry non-overlay content (docs, staging dirs) without the name accidentally matching a repo under a watched root. Per-source: another source may still provide the same key.
 - **Partial**: `_shared/<name>.md` in any source. Referenced from templates as `{{>_shared/<name>.md}}`.
-- **Template**: Any file in a source ending in `.mo`. Rendered to `_rendered/<key>/<path>` (extension stripped). Non-`.mo` files are symlinked verbatim. 
+- **Template**: Any file in a source ending in `.mo`. Rendered to `_rendered/<key>/<path>` (extension stripped). Non-`.mo` files are symlinked verbatim. A template whose destination ends in `.json` must render to parseable JSON; an unparseable render is refused (status: `invalid-json`). 
 - **Live file**: The symlink at the destination that the agent reads/writes.
 - **Drifted file**: A live file no longer matches a fresh render of its source. 
 
@@ -212,7 +218,7 @@ repo-overlay render <src> <dst>  # (internal) render one template
 repo-overlay watch [--once]      # inotify daemon; --once runs apply_all and exits
 repo-overlay list                # list every live symlink ($HOME-relative), one per line
 repo-overlay config              # print effective sources, targets, watched_roots
-repo-overlay status [<path>]     # reports drifts / broken links / missing partials
+repo-overlay status [<path>]     # reports drifts / broken links / missing partials / stale renders / invalid JSON
 ```
 
 `status` without an argument sweeps every destination (~0.2 s here). With a
