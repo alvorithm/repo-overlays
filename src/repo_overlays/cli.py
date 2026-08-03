@@ -192,7 +192,7 @@ def cmd_status(args: argparse.Namespace) -> int:
         # A tracked overlay link is a one-way trap: info/exclude only hides
         # untracked paths, so it stays tracked until untracked by hand.
         for rel in tracked_links(dest_root, [lr.path for lr in manifest.links]):
-            print(f"tracked: {dest_root / rel} — git -C {dest_root} rm --cached {rel}")
+            print(f"tracked: {dest_root / rel} -> git -C {dest_root} rm --cached {rel}")
             issues += 1
 
         for marker in divergent_markers(dest_root):
@@ -207,7 +207,7 @@ def cmd_status(args: argparse.Namespace) -> int:
         from .bootstrap import unmanaged_destinations
 
         for dest in unmanaged_destinations(config):
-            print(f"unmanaged: {dest} — repo-overlay init {dest}")
+            print(f"unmanaged: {dest} -> repo-overlay init {dest}")
             issues += 1
 
     if not path:

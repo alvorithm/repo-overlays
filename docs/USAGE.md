@@ -781,7 +781,7 @@ which gets a single `/dir/` entry instead of one entry per file.
 `repo-overlay status` reports the trap directly, per destination:
 
 ```
-tracked: ~/Code/beadpot/work/…/REPORT.md — git -C ~/Code/beadpot rm --cached work/…/REPORT.md
+tracked: ~/Code/beadpot/work/…/REPORT.md -> git -C ~/Code/beadpot rm --cached work/…/REPORT.md
 ```
 
 Nothing else surfaces this: a staged overlay symlink looks like any other

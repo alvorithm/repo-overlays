@@ -196,7 +196,7 @@ def _collapsible_dirs(dest_root: Path, owned_dirs: list[str], warn: bool) -> lis
     if warn:
         for d, n in sorted(blocked.items()):
             print(
-                f"  own-marker: {d}/ kept per-file — git tracks {n} path(s) there "
+                f"  own-marker: {d}/ kept per-file, git tracks {n} path(s) there "
                 f"(git -C {_fmt_path(dest_root)} rm --cached them to collapse it)",
                 file=sys.stderr,
             )
@@ -301,7 +301,7 @@ def _owned_dirs(key: str, is_fixed: bool, stack: SourceStack) -> list[str]:
             # `/` would exclude the whole destination, overlay files and the
             # project's own tree alike.
             print(
-                f"  own-marker: ignored at the root of key {key!r} — it would "
+                f"  own-marker: ignored at the root of key {key!r}, it would "
                 "exclude the entire destination",
                 file=sys.stderr,
             )

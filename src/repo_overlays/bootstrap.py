@@ -155,7 +155,7 @@ def bootstrap(
     if resolved is None:
         roots = ", ".join(str(r) for r in config.all_watched_roots) or "(none configured)"
         print(
-            f"error: {path} resolves to no overlay key — not a fixed target and "
+            f"error: {path} resolves to no overlay key: not a fixed target and "
             f"not a git repo under a watched root ({roots})",
             file=sys.stderr,
         )
@@ -235,7 +235,7 @@ def bootstrap(
 
     if not write:
         if missing:
-            print(f"  {missing} file(s) to create — re-run with --write", file=sys.stderr)
+            print(f"  {missing} file(s) to create -> re-run with --write", file=sys.stderr)
         return 1 if missing else 0
 
     # Mutating run: apply unconditionally, so an already populated key dir is
@@ -246,7 +246,7 @@ def bootstrap(
         return 0
     if not apply_one(dest_root, config):
         print(
-            f"error: nothing materialised at {dest_root} (init wrote key {key}) — "
+            f"error: nothing materialised at {dest_root} (init wrote key {key}): "
             f"check `repo-overlay status {dest_root}`",
             file=sys.stderr,
         )
