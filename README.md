@@ -56,23 +56,17 @@ key-naming rules are in [docs/USAGE.md § `init`](docs/USAGE.md).
 
 **Separation of concerns.** [chezmoi](https://www.chezmoi.io/) manages files that *applications* read (settings, keybindings). repo-overlays manages files that *LLM agents* read (`CLAUDE.md`, `AGENTS.md`, skills, slash commands). The two never fight over the same file.
 
-**Consuming harnesses.** Fixed-target keys deploy agent guidance into the config dirs of the harnesses in use: `pi`, `omp` (oh-my-pi), Claude Code, `dirge` and `juggler`, with [Zed](https://zed.dev/) as an ACP front-end:
+**Consuming harnesses.** A fixed-target key deploys guidance to an absolute path, declared by the source that owns the key:
 
-| Fixed key  | Destination             | Read by |
-|------------|-------------------------|---------|
-| `_claude`  | `~/.config/claude`      | Claude Code, omp |
-| `_pi`      | `~/.config/pi/agent`    | pi |
-| `_omp`     | `~/.config/omp/agent`   | omp |
-| `_dirge`   | `~/.config/dirge/agent` | dirge (guidance only; it refuses symlinked skills, so `dirge-skills-sync` mirrors the `_claude` set as real files) |
-| `_juggler` | `~/.config/juggler`     | juggler, indirectly: it reads no global instructions file, so `juggler-sync-guidance` compiles this `AGENTS.md` into its prompt-pack extension |
+```toml
+# <source>/config.toml
+[targets]
+_claude = "~/.config/claude"
+```
 
-The watcher discovers project destinations under `~/Code`, `~/Worktrees` and `~/Ask`.
+Which harnesses a machine feeds, where each reads its guidance from, and the per-harness workarounds they need (one refuses a symlinked skill file, another reads no global instructions file at all) are properties of that machine's overlay sources, not of this tool. `repo-overlay config` prints the live targets and watched roots; the reasoning behind a particular set belongs in the README of the source that declares it.
 
-Notes on the harnesses (context for why the targets look the way they do):
-
-- **Shared core** — pi and omp share the agent core and a JSONL session store; override the location with `--session-dir` (omp) or `PI_CODING_AGENT_SESSION_DIR` (pi).
-- **Skill discovery** — Claude Code and omp auto-discover skills from `~/.config/claude/skills/`; pi requires an explicit `skills` entry in its `settings.json`.
-- **Claude Code XDG** — Claude Code hard-codes `~/.claude`; a chezmoi-managed symlink `~/.claude → ~/.config/claude` keeps it XDG-compliant.
+Project destinations are discovered under each source's `watched_roots`, and every git repo and linked worktree found there is a candidate.
 
 ## Glossary
 
@@ -254,11 +248,4 @@ repo-overlay promote                 # interactive: reconcile agent-edited files
 
 ## Overlay repos in use
 
-| Repo | Path | Visibility | Purpose |
-|------|------|-----------|---------|
-| defaults | `~/Overlays/defaults` | private | Personal voice/style/language partials; orchestrating templates; the skill bodies (`_shared/skills/`); the fixed targets and `_template/` |
-| penpot-docs | `~/Overlays/penpot-docs` | public | Penpot data model and implementation |
-| beadpot-docs | `~/Overlays/beadpot-docs` | public | beadpot model schemas, graph ingestion pipeline, skills |
-| memory-bus | `~/Overlays/memory-bus` | private | Per-repo memory wiring plus the curation skills; flagged `private = true`, so public sources never read its partials |
-| eidos | `~/Overlays/eidos` | private | Docs for the `eidos` key |
-| nlp-beta-docs | `~/Overlays/NLP-beta` | private | Course docs |
+`repo-overlay config` is the answer for any given machine: it prints each source, its path, its privacy flag, its targets and its watched roots, in stack order. Nothing here duplicates that list, because a stale copy of it is worse than no copy. What a source holds, who may read it, and why it exists belong in that source's own README.
