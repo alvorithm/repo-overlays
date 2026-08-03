@@ -217,7 +217,7 @@ ln -sf $PWD/.venv/bin/repo-overlay ~/.local/bin/`
 These commands are available
 
 ```
-repo-overlay init [<path>]       # bootstrap a repo's key from _template/ (dry-run; --write)
+repo-overlay init [<path>]       # bootstrap a repo's key from _template/ (dry-run; --write, --key)
 repo-overlay apply [<path>]      # materialise; default = apply everything
 repo-overlay promote <key>       # reconcile drift interactively
 repo-overlay render <src> <dst>  # (internal) render one template
@@ -245,6 +245,7 @@ applies it.
 repo-overlay init                # dry-run for the cwd's repo: lists what it would create
 repo-overlay init <path> --write # create the missing files, then apply the destination
 repo-overlay init --source memory-bus --slug my-repo --write
+repo-overlay init <path> --key beadpot --write   # force the key name
 ```
 
 - **`_template/`** is a reserved source directory (like `_shared`/`_rendered`,
@@ -253,16 +254,61 @@ repo-overlay init --source memory-bus --slug my-repo --write
   wiring, `defaults` the guidance — so `init` walks the stack and writes each
   source's template into that source's tree only.
 - **Variables**, substituted in file paths and bodies: `{{key}}` (resolved
-  overlay key), `{{slug}}` (`--slug`, else kebab-cased basename), `{{dest}}`
+  overlay key), `{{slug}}` (`--slug`, else the kebab-cased key, so a worktree or
+  a differently named clone does not seed its directory name), `{{dest}}`
   (absolute destination), `{{remote}}` (origin `owner_repo`, else empty). Only
   these four are touched; `{{>_shared/…}}` partials and any other `{{…}}` are
   left for `apply` to render — a `.mo` in the skeleton stays a live template.
-- **Dry-run by default**; `--write` creates only absent files (never clobbers a
-  hand-edited one) and ends by applying the destination. Exit codes follow
-  `status`: 0 = nothing to do, 1 = files missing/created, ≥2 = error. Re-running
-  after adding a template file therefore backfills exactly that file.
-- The key is resolved exactly as `apply` resolves it (`resolve_key_dest`), so a
-  linked worktree bootstraps its *repo's* key once, not one per worktree.
+  Those four names are **reserved inside `_template/`**: `init` substitutes them
+  before `apply` ever sees the file, so a data-active key (one carrying
+  `data.toml`, § 2 *Concepts*) cannot receive them from the renderer.
+- **Key naming.** An explicit `--key NAME` wins verbatim. A fixed-target
+  destination (one that matched `[targets]`, e.g. the `_claude` key) keeps its
+  key unchanged, never rewritten. Otherwise: if the resolved key already exists
+  as a key directory in some source, it is used as is; if no source has it, the
+  key is **new** and defaults to the bare remote repo name (`repo` out of
+  `owner/repo`), falling back to the destination directory's basename when the
+  repo has no remote. A run that will create a new key prints one extra line
+  naming it, so the dry-run is the place to catch a wrong guess:
+  `new key: NLP-beta (no source has this key yet; override with --key)`.
+- **Why not the resolver's own fallback.** `resolve_key_dest` falls back to the
+  owner-qualified slug (`owner_repo`) when nothing matches. That is right for
+  *lookup* and wrong for *creation*: on a normal setup every existing key is a
+  bare name, so writing the first `owner_repo`-named key directory is a silent,
+  permanent naming divergence that only shows up later, as a key that no other
+  clone of the repo resolves to. A worktree's directory basename is wrong for
+  the same reason (`beadpot-userlibs` for a worktree of `beadpot`). Two repos
+  that share a bare name are disambiguated with `--key`, once, at creation.
+- **Lookup order**, unchanged, used to find an *existing* key: remote slug
+  (`owner_repo`), then destination basename, then bare remote repo name, each
+  tested for membership in the set of key directories that exist across the
+  sources; when none of the three match, the slug (else the basename) is
+  returned. `--slug` plays no part in this: it is the memory/project slug
+  substituted into `{{slug}}`, unrelated to the key.
+- **Dry-run by default**, and a dry-run never writes. `--write` creates only
+  absent files (a hand-edited one is never clobbered, it is reported `ok:`) and
+  then *always* applies the destination, even when every template file already
+  existed. So `init --write` is also the repair command for a key directory
+  that was hand-made and never applied. Re-running after adding a template file
+  backfills exactly that file.
+- **Worktrees.** The destination is resolved exactly as `apply` resolves it
+  (`resolve_key_dest`), so a linked worktree bootstraps its *repo's* key once,
+  not one per worktree.
+
+**Exit codes.** Dry-run keeps the `status` contract; `--write` is a mutating
+command and behaves like `apply`.
+
+| Mode | Code | Meaning | Typical cause |
+|---|---|---|---|
+| dry-run | 0 | nothing to create | the key is already fully bootstrapped |
+| dry-run | 1 | work pending | at least one template file is missing |
+| `--write` | 0 | success | files created, or none needed; the destination applied cleanly |
+| either | 2 | error | destination unresolvable (not a git repo, no target match), or the trailing apply failed |
+
+`--write` **never** exits 1, so `repo-overlay init X --write && <next step>`
+chains work: a successful write is a success, exactly as with `apply`. Dry-run
+exit 1 means "work pending", the same convention `status` uses, so a non-zero
+dry-run is a to-do list rather than a failure.
 
 **Discovery.** `repo-overlay status --unmanaged` additionally lists git repos
 under the watched roots that no key covers, each with the `init` command to fix
@@ -270,6 +316,24 @@ it. It is **off by default on purpose**: the scheduled drift digest consumes
 `status` and treats any line as an issue, so surfacing every bare repo
 unconditionally would turn the daily signal into a permanent nag. Run it
 on demand; the digest does not pass the flag.
+
+**Fresh-clone recipe.** For a repo that no source covers yet:
+
+1. Clone (or create) the overlay source repo that will hold the key, e.g.
+   `~/Overlays/beadpot-docs`.
+2. Register it by hand: append a `[[sources]]` block to
+   `~/.config/repo-overlays/config.toml` (§ 6.1). There is no command for this.
+3. Create `_template/` in that source, holding the skeleton every new key of
+   that source should get.
+4. Run `repo-overlay init <clone>` as a dry-run. Read the plan, check the
+   `new key:` line for the name it picked, then re-run with `--write`.
+5. Confirm: `repo-overlay status --unmanaged` no longer lists the clone.
+6. Commit the new key directory in the overlay source.
+
+What is deliberately not automated: registering the source (step 2), cloning
+anything (the source in step 1, and the target repo itself), and pushing the
+bootstrapped key directory back to its remote (step 6 commits locally; the push
+is yours).
 
 ### Scheduled drift digest
 
@@ -671,6 +735,13 @@ The destination then gets one directory entry instead of one line per file:
 /AGENTS.md
 /src/beadpot/graph/AGENTS.md
 ```
+
+Scope: `.overlay-own` marks a directory overlay-owned for the purposes of the
+git exclude block **only**. It does not stop the source's files under that
+directory from materialising, and it does not make the destination's own files
+disappear. The source files under an own-marked directory are materialised
+exactly as anywhere else; the one thing that changes is the exclude block,
+which gets a single `/dir/` entry instead of one entry per file.
 
 - Git does not descend into the directory at all, so *anything* appearing
   there is silent — overlay-managed or not. That is the point: the tree is
