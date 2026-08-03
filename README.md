@@ -3,8 +3,8 @@
 Compose personal/team-authored Markdown guidance for AI agents into project
 worktrees, without committing it upstream.
 
-- `USAGE.md` — feature specification and user workflow
-- `doc_overlays.graphml` — full composition diagram (open with yEd)
+- `docs/USAGE.md`: feature specification and user workflow
+- `docs/example_overlays.graphml`: full composition diagram (open with yEd)
 
 ![Example multi-source multi-target overlay set](docs/example_overlays.svg)
 
@@ -34,19 +34,39 @@ Benefits:
 1. your personal guidance (i.e. `defaults`) stays out of upstream, and private
 2. project notes can be git-shared 
 
+## Bootstrapping a new repo
+
+A repo cloned under a watched root has zero coverage until a key directory
+exists for it, and nothing in the flow reminds you. So ask, then create:
+
+```sh
+repo-overlay status --unmanaged            # repos under watched roots that no key covers
+repo-overlay init ~/Code/newrepo           # dry run: what each source would create
+repo-overlay init ~/Code/newrepo --write   # create the key dirs, then apply
+```
+
+Each source keeps its own `_template/` skeleton holding only what that source
+would own for any repo; `init` instantiates it into `<source>/<key>/`. It never
+clobbers (an existing file is reported `ok:`) and never shadows a path that
+another source provides for the key, or that the destination already holds as a
+regular file (both `have:`). Exit codes, the four substituted variables and the
+key-naming rules are in [docs/USAGE.md § `init`](docs/USAGE.md).
+
 ## Where overlays land: harnesses
 
 **Separation of concerns.** [chezmoi](https://www.chezmoi.io/) manages files that *applications* read (settings, keybindings). repo-overlays manages files that *LLM agents* read (`CLAUDE.md`, `AGENTS.md`, skills, slash commands). The two never fight over the same file.
 
-**Consuming harnesses.** Fixed-target keys deploy agent guidance into the config dirs of the harnesses in use — `pi`, `omp` (oh-my-pi), and Claude Code, with [Zed](https://zed.dev/) as an ACP front-end:
+**Consuming harnesses.** Fixed-target keys deploy agent guidance into the config dirs of the harnesses in use: `pi`, `omp` (oh-my-pi), Claude Code, `dirge` and `juggler`, with [Zed](https://zed.dev/) as an ACP front-end:
 
-| Fixed key | Destination | Read by |
-|-----------|-------------|---------|
-| `_claude` | `~/.config/claude` | Claude Code, omp |
-| `_pi`     | `~/.config/pi`     | pi |
-| `_omp`    | `~/.config/omp`    | omp |
+| Fixed key  | Destination             | Read by |
+|------------|-------------------------|---------|
+| `_claude`  | `~/.config/claude`      | Claude Code, omp |
+| `_pi`      | `~/.config/pi/agent`    | pi |
+| `_omp`     | `~/.config/omp/agent`   | omp |
+| `_dirge`   | `~/.config/dirge/agent` | dirge (guidance only; it refuses symlinked skills, so `dirge-skills-sync` mirrors the `_claude` set as real files) |
+| `_juggler` | `~/.config/juggler`     | juggler, indirectly: it reads no global instructions file, so `juggler-sync-guidance` compiles this `AGENTS.md` into its prompt-pack extension |
 
-The watcher discovers project destinations under `~/Code` and `~/Ask`.
+The watcher discovers project destinations under `~/Code`, `~/Worktrees` and `~/Ask`.
 
 Notes on the harnesses (context for why the targets look the way they do):
 
@@ -61,14 +81,17 @@ Notes on the harnesses (context for why the targets look the way they do):
 | **source** | A directory (git repo) holding overlay files. You can stack several; they are consulted in declared order. |
 | **source stack** | The ordered list of sources. Later sources override earlier ones on per-file conflicts; the first source that has a partial wins for partial lookup. |
 | **overlay key** | A top-level directory in a source, matched to a destination. Keys starting with `_` are *fixed targets* (bound to an absolute path); others are *project overlays* matched to a git repo by, in order: remote slug (`owner_repo`), directory basename, then bare remote repo name (`repo`). The last step lets linked worktrees match by repo identity regardless of their directory name — see [Worktrees](#worktrees). |
-| **partial** | A `_shared/<name>.md` file in any source. Included into templates with `{{>_shared/<name>.md}}`. |
+| **partial** | A file under `_shared/` in any source, nested paths included (`_shared/skills/<name>.md`). Pulled into templates with `{{>_shared/<path>}}`; `{{>@source/_shared/<path>}}` pins one source. |
 | **template** | A `*.mo` file. Rendered via Mustache (partials resolved across the whole source stack) into `_rendered/<key>/<path>`. |
+| **`_template`** | A source's bootstrap skeleton, instantiated into `<source>/<key>/` by `repo-overlay init`. Reserved like `_shared/` and `_rendered/`: never an overlay key itself. |
+| **`data.toml`** | A `<key>/data.toml` makes the key *data-active*: its `.mo` templates get Mustache variables and sections rendered over the parsed TOML, after partials resolve. A key without one keeps the partial-only contract byte-identical. |
 | **materialise** | The act of writing `_rendered/` output and placing a symlink at the destination. |
 | **live file** | The symlink at the destination that the agent reads or writes. |
 | **owned directory** | A source directory carrying an empty `.overlay-own` marker: wholly overlay-owned, so the destination excludes the *directory* (`/work/`) instead of each file under it. Keeps new files in the tree from ever being visible to git — see [USAGE.md §9.2](docs/USAGE.md). |
 | **drift** | A live file whose content no longer matches a fresh render of its template — i.e. an agent has edited it since the last apply. |
 | **reconcile** | The interactive step (`repo-overlay promote`) that resolves drift: diff, accept the new render, keep the agent's edit, or edit the source. |
 | **watched_roots** | Parent directories whose git-repo children are auto-discovered as destinations and re-applied when any source changes. |
+| **unmanaged repo** | A git repo under a watched root that no overlay key covers, so `apply` passes it by. Listed by `repo-overlay status --unmanaged`, off by default so the daily drift digest stays clean. |
 
 ## Worktrees
 
@@ -221,16 +244,21 @@ Two things worth knowing about the shape of this snippet:
 ## Quick start
 
 ```sh
-repo-overlay config     # show effective sources and targets
-repo-overlay apply      # materialise all overlays now
-repo-overlay status     # check for drift, broken links, missing partials
-repo-overlay promote    # interactive: reconcile agent-edited files
+repo-overlay config                  # show effective sources and targets
+repo-overlay apply                   # materialise all overlays now
+repo-overlay status                  # check for drift, broken links, missing partials
+repo-overlay status --unmanaged      # also list watched-root repos that no key covers
+repo-overlay init <path> --write     # create <path>'s key from each _template/, then apply
+repo-overlay promote                 # interactive: reconcile agent-edited files
 ```
 
 ## Overlay repos in use
 
 | Repo | Path | Visibility | Purpose |
 |------|------|-----------|---------|
-| defaults | `~/Overlays/defaults` | private | Personal voice/style/language partials; orchestrating templates |
+| defaults | `~/Overlays/defaults` | private | Personal voice/style/language partials; orchestrating templates; the skill bodies (`_shared/skills/`); the fixed targets and `_template/` |
 | penpot-docs | `~/Overlays/penpot-docs` | public | Penpot data model and implementation |
 | beadpot-docs | `~/Overlays/beadpot-docs` | public | beadpot model schemas, graph ingestion pipeline, skills |
+| memory-bus | `~/Overlays/memory-bus` | private | Per-repo memory wiring plus the curation skills; flagged `private = true`, so public sources never read its partials |
+| eidos | `~/Overlays/eidos` | private | Docs for the `eidos` key |
+| nlp-beta-docs | `~/Overlays/NLP-beta` | private | Course docs |

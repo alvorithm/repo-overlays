@@ -25,6 +25,11 @@ same files) into project worktrees, without committing it upstream.
   parsed TOML; every other key keeps the legacy partial-only contract,
   byte-identical. `status` lints variable refs that resolve against no data
   key (`unknown-data-ref:`).
+- **New-repo bootstrap**: `repo-overlay init` instantiates each source's
+  `_template/` skeleton into `<source>/<key>/` for a destination no key covers
+  yet and applies it, so setting a repo up costs one command; `repo-overlay
+  status --unmanaged` lists the git repos under the watched roots that no key
+  covers at all (§5 `init`).
 - **Multi-source composition**: stack several overlay repos (private +
   public/Codeberg-wiki) so collaborators can contribute to one without seeing the
   others.
@@ -33,11 +38,12 @@ same files) into project worktrees, without committing it upstream.
 - **Overlay source**: A directory (typically a Git repo) holding overlays identified by keys. You can have several souce repos; they are stacked in declared order.
 - **Overlay key**: A top-level directory in a source. Two kinds: 
     - *Fixed target*: Key starts with `_`. Bound to an absolute destination in the source's `config.toml`. Layout mirrors the destination 1:1.
-    - *Project overlay*: Key does not start with `_`. Bound to a worktree by git remote slug (`owner_repo`), falling back to the directory basename if the slug doesn't match any source key. Uses `dot_X` → `.X` rewrite at materialisation.
+    - *Project overlay*: Key does not start with `_`. Bound to a worktree by testing three candidates for membership in the set of key directories that exist across the sources, in order: git remote slug (`owner_repo`), the destination directory basename, then the bare remote repo name (`repo`). First match wins; the third is what makes a linked worktree resolve to its repo's key whatever its own directory is called. When none match, the key falls back to the slug (else the basename) and nothing materialises, since no source provides that key. Uses `dot_X` → `.X` rewrite at materialisation.
 - **Ignored key**: A top-level directory declared as NOT an overlay key for its source — via `ignore_keys = ["dir", …]` in the source's `config.toml` or an `.overlay-ignore` file at the source root (one name per line, `#` comments, trailing `/` allowed). Lets a source repo carry non-overlay content (docs, staging dirs) without the name accidentally matching a repo under a watched root. Per-source: another source may still provide the same key.
 - **Partial**: `_shared/<name>.md` in any source. Referenced from templates as `{{>_shared/<name>.md}}`.
 - **Template**: Any file in a source ending in `.mo`. Rendered to `_rendered/<key>/<path>` (extension stripped). Non-`.mo` files are symlinked verbatim. A template whose destination ends in `.json` must render to parseable JSON; an unparseable render is refused (status: `invalid-json`).
 - **Data**: `<key>/data.toml` in any source. A key carrying one is *data-active*: its `.mo` templates render with full Mustache (variables `{{name}}`, sections `{{#list}}…{{/list}}`, inverted `{{^x}}`, raw `{{{x}}}`) against the parsed TOML. A key without one keeps the legacy contract: only `{{>partial}}` resolves and every other `{{…}}` passes through verbatim. The file resolves like a partial — first source in stack order wins, whole file, never merged, privacy-checked — and is never materialised. List-of-table values get `first`/`last` booleans injected (reserved keys) so templates can join items with commas. 
+- **Skeleton**: `_template/` in any source. A key skeleton rather than an overlay key: `repo-overlay init` instantiates it into `<source>/<key>/` for a destination, substituting `{{key}}`, `{{slug}}`, `{{dest}}` and `{{remote}}` in paths and bodies and leaving every other tag for `apply`. Per source, and instantiated for *every* key `init` touches, so it holds only what that source would own for any repo (§5).
 - **Live file**: The symlink at the destination that the agent reads/writes.
 - **Drifted file**: A live file no longer matches a fresh render of its source. 
 
@@ -52,6 +58,7 @@ These are the files you may find in a source overlay repo:
 ├── _shared/                      # (optional) re-usable snippets for templates
 │   └── python-style.md           
 ├── _rendered/                    # (optional) rendered .mo templates; gitignored
+├── _template/                    # (optional) skeleton `repo-overlay init` copies into <key>/
 ├── _claude/                      # fixed target → ~/.config/claude
 │   ├── CLAUDE.md.mo
 │   └── commands/commit-msg.md
@@ -76,7 +83,7 @@ beadpot_agent_overlay/
 
 The file `config.toml` specifies how to map overlay directories to targets
 - directories prefixed `_` point to “fixed” targets declared in `[targets]`
-    - (except for `_shared` and `_rendered`, which are reserved for internal use)
+    - (except for `_shared`, `_rendered` and `_template`, which are reserved for internal use)
 - any other directories are treated as repo/worktree keys to be resolved by looking into the listed `watched_roots` in order.
 
 ```toml
@@ -225,6 +232,7 @@ repo-overlay watch [--once]      # inotify daemon; --once runs apply_all and exi
 repo-overlay list                # list every live symlink ($HOME-relative), one per line
 repo-overlay config              # print effective sources, targets, watched_roots
 repo-overlay status [<path>]     # reports drifts / broken links / missing partials / stale renders / invalid JSON
+repo-overlay status --unmanaged  # ...and git repos under the watched roots that no key covers
 ```
 
 `status` without an argument sweeps every destination (~0.2 s here). With a
@@ -292,13 +300,15 @@ repo-overlay init <path> --key beadpot --write   # force the key name
   absent files and then *always* applies the destination, even when every
   template file already existed. So `init --write` is also the repair command
   for a key directory that was hand-made and never applied, and re-running
-  after adding a template file backfills exactly that file. Two kinds of file
+  after adding a template file backfills exactly that file. Three kinds of file
   are left alone: one that already exists in the key directory (`ok:`, so a
-  hand-edited file is never clobbered) and one whose destination path another
-  source already provides for that key (`have:`, since two sources on one path
-  is a whole-file override, and the skeleton must not shadow real content).
-  That second rule is what makes shipping a new `_template/` file and sweeping
-  it across existing keys safe.
+  hand-edited file is never clobbered), one whose destination path another
+  source already provides for that key, and one the destination itself holds as
+  a regular file, upstream's own `AGENTS.md` for instance (both `have:`). Two
+  sources on one path is a whole-file override, and `apply` refuses to replace a
+  real file with a link on every run, so in either case the skeleton's copy would
+  shadow real content or become a permanent warning. Those two rules are what
+  make shipping a new `_template/` file and sweeping it across existing keys safe.
 - **Worktrees.** The destination is resolved exactly as `apply` resolves it
   (`resolve_key_dest`), so a linked worktree bootstraps its *repo's* key once,
   not one per worktree.
@@ -557,14 +567,16 @@ source owned (tracked via the per-destination applied-links manifest, §7).
 
 ### Key resolution
 
-The resolver tries the **git remote slug** first, then the **toplevel directory
-basename**. This gives three scenarios:
+The resolver tests three candidates against the keys that exist across the
+sources: the **git remote slug** (`owner_repo`), the **toplevel directory
+basename**, then the **bare remote repo name** (`repo`). First match wins.
 
-| Scenario | Slug matches a key? | Basename matches a key? | Result |
-|---|---|---|---|
-| Main checkout | `penpot_beadpot` → no | `beadpot` → yes | Uses `beadpot` key |
-| Worktree with custom key | `penpot_penpot` → no | `penpot-feature` → yes | Uses `penpot-feature` key |
-| Worktree, no matching key | `penpot_beadpot` → no | `scoping` → no | No overlay materialised |
+| Scenario | Slug | Basename | Bare name | Result |
+|---|---|---|---|---|
+| Main checkout | `penpot_beadpot` → no | `beadpot` → yes | not reached | `beadpot` key |
+| Worktree with its own key | `alvorithm_penpot` → no | `penpot-feature` → yes | not reached | `penpot-feature` key |
+| Worktree named for a branch | `alvorithm_beadpot` → no | `beadpot-userlibs` → no | `beadpot` → yes | `beadpot` key, same overlay as the main checkout |
+| Nothing matches | no | no | no | Nothing materialised; `status --unmanaged` lists the repo, `init` bootstraps it |
 
 ### Creating a worktree-specific overlay
 
@@ -578,10 +590,12 @@ sections. The basename fallback picks it up.
 
 ### Worktrees without their own overlay
 
-When no key matches, the worktree gets no materialised symlinks. Read docs from the
-main checkout's already-materialised locations, and edit at the overlay source.
-Per-feature folders inside a shared overlay key (e.g. `work/wf-now/feature-scoping/`)
-cover branch-specific docs without per-worktree overlays.
+A worktree needs no key of its own: the bare-remote-repo-name candidate resolves
+it to its repo's key, so it materialises the same overlay as the main checkout.
+Per-feature folders inside that shared key (e.g. `work/wf-now/<branch>/`) cover
+branch-specific docs without per-worktree overlays, which is the normal
+arrangement. Only a checkout whose *repo* has no key anywhere gets nothing; that
+is what `repo-overlay init` (§5) is for.
 
 ### Excluding one destination
 
@@ -776,8 +790,22 @@ directory that no other clone can resolve.
 
 ### 9.3 Setting up a new overlayed repo
 
+One command, for any source that ships a `_template/` skeleton:
+
+```sh
+repo-overlay status --unmanaged        # which repos have no key at all
+repo-overlay init ~/Code/new-repo      # dry run: what each skeleton would create
+repo-overlay init ~/Code/new-repo --write
+```
+
+`--write` creates the key directory and applies it, so the manifest, symlinks and
+`.git/info/exclude` entries all follow. See §5 for the exit codes and how the key
+is named.
+
+By hand, when no source has a skeleton for what this repo needs:
+
 1. Add the overlay key directory in your overlay source (e.g.
-   `~/Code/my-overlay/new-repo/CLAUDE.md`).
+   `~/Overlays/my-overlay/new-repo/AGENTS.md`).
 2. Ensure the repo is under a `watched_roots` path in your source's
    `config.toml`.
 3. Run `repo-overlay apply`.  The manifest, symlinks, and

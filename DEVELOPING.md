@@ -15,15 +15,17 @@ src/repo_overlays/
 │                 # produces frozen AppConfig (SourceConfig list + unified targets)
 ├── sources.py    # SourceStack: iterate keys, merge per-key file lists (later src wins),
 │                 # resolve_partial() with @name/ addressing and privacy enforcement
-├── resolve.py    # map a path → (key, dest_root, is_fixed) via fixed targets, then git
-│                 # remote slug (falling back to basename if slug matches no source key);
-│                 # iter_all_destinations() for apply_all
+├── resolve.py    # map a path → (key, dest_root, is_fixed) via fixed targets, then the
+│                 # first of remote slug / basename / bare repo name that names an existing
+│                 # key (else slug, else basename); iter_all_destinations() for apply_all
 ├── render.py     # render *.mo by recursive {{>ref}} substitution with _PartialLoader;
 │                 # drift detection; writes _rendered/<source>/<key>/<rel>
 ├── apply.py      # walk stack for each key, call render or symlink verbatim, dot_rewrite
 │                 # for project overlays; skip silently (_already_applied) on re-entry;
 │                 # catch missing partials and continue; prune manifest on re-apply
 ├── manifest.py   # read/write/prune <dest_root>/.repo-overlays.toml (tomllib/tomli_w)
+├── bootstrap.py  # repo-overlay init: seed <source>/<key>/ from each source's _template/,
+│                 # four init vars, then apply; unmanaged_destinations() → status --unmanaged
 ├── promote.py    # interactive reconciliation of .proposed / .divergent files
 └── watch.py      # inotify_simple loop with 200 ms debounce; calls apply_all on events
 ```
@@ -65,6 +67,8 @@ for each (key, dest_root, is_fixed):
 
 **Worktree resolution** — `_git_toplevel()` (resolve.py) handles both regular `.git` directories and linked-worktree `.git` files, resolving through the git common dir and origin remote URL. This is what makes the bare-remote-repo-name candidate (step 3 above) usable: a worktree checked out under an arbitrary directory name still resolves to the same overlay key as its main checkout.
 
+**Bootstrap keys**: `bootstrap()` (bootstrap.py) resolves the destination with `resolve_key_dest`, whose owner-qualified-slug fallback is right for *lookup* and wrong for *creation*: minting the first `owner_repo` key dir would be a silent, permanent divergence from the hand-made bare names, so a key no source has yet defaults to the bare remote repo name, else the destination basename, with `--key` as the disambiguator. A `--key` the resolver could never reach for that destination (neither its remote slug, nor its basename, nor its bare repo name) is refused before anything is written, because nothing would ever look at that directory. The skeleton copy filters with `is_tool_junk`, not `_is_junk` (sources.py): the `.overlay-own` marker and a key-root `data.toml` never *materialise*, but this copy is source to source, so they are content a skeleton must be able to seed; only editor leftovers and tool caches are dropped. Backfilling an existing key is therefore safe, since every collision has a skip: `ok:` for a path already in the key dir, `have:` for a destination path another source already provides for that key or that the destination holds as a regular file (`apply` would refuse to overwrite it anyway). Exit codes split by mode: `init --write` follows `apply` (0 on success, 2 on error, never 1), the dry run follows `status` (0 nothing to create, 1 work pending).
+
 **Git-dir destinations** — `_resolve_dest()` / `_git_path()` (apply.py) route any destination whose first component is `.git` through `git rev-parse --git-path`, never a plain join: in a linked worktree `.git` is a *file*, so joining raised `NotADirectoryError`, and git itself splits the git dir between the per-worktree gitdir (`HEAD`, `index`) and the shared common dir (`hooks/`, `info/`, `config`). Links resolving outside `dest_root` are recorded absolute in the manifest — `dest_root / <absolute>` returns the absolute path, so manifest consumers are unaffected. `info/exclude` is shared for the same reason, hence the `[<dest_root>]`-labelled block per destination.
 
 **Failure containment** — `_apply_key()` reports and skips per-file `OSError` (source → destination, error type); `_apply_and_record()` wraps the whole per-destination apply in the same net. One unwritable or malformed destination never aborts a sweep over the others.
@@ -105,9 +109,7 @@ systemctl --user start repo-overlay.service
 
 ## Known issues
 
-**Destination depth cap** — `iter_all_destinations` (resolve.py:91) caps git repo discovery at 5 path components relative to a `watched_root`. Worktree layouts deeper than this are silently skipped. Increase the cap or add the destination explicitly as a fixed target in `config.toml`.
-
-**Divergence false positives** — `status` detects diverged destinations by scanning `dest_root.rglob(".divergent")`. If two destination roots share a parent (e.g. one is a subdirectory of the other), a marker from the inner root will appear in the outer root's scan.
+**Destination depth cap**: `_iter_repo_roots` (resolve.py:140) caps git repo discovery at `_MAX_SEARCH_DEPTH` = 4 path components below a `watched_root`, and stops descending at the first repo it finds. A checkout deeper than the cap is silently skipped; raise the cap or add the destination explicitly as a fixed target in `config.toml`. Linked worktrees are exempt since f1c568a: they come from `git worktree list` (`_linked_worktrees`), so they are picked up wherever they live, however deep.
 
 **Variables are key-gated** — templates render `{{>partial}}` only unless the key carries `data.toml`; then chevron renders the partial-resolved text against the parsed TOML (variables, sections, inverted sections, `{{{raw}}}`). No-data keys stay byte-identical to the legacy regex path (regression-tested). The data file resolves like a partial — first source in stack order wins, whole file, never merged, privacy-checked — and never materialises (it is excluded in `_is_junk`). List-of-table values get `first`/`last` injected (reserved keys). `status` lints plain `{{var}}` refs against the data (`unknown-data-ref`), tracking section context like chevron's context stack; sections over absent data legitimately render nothing.
 
