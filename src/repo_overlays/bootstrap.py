@@ -11,6 +11,20 @@ substitutes only the four *init variables* — ``{{key}}``, ``{{slug}}``,
 ``{{dest}}``, ``{{remote}}`` — in file paths and bodies; ``{{>partials}}`` and
 every other ``{{…}}`` are left verbatim, so a ``.mo`` copied into the key dir is
 rendered by ``apply`` later exactly as any hand-authored template would be.
+
+The key directory is the one ``resolve_key_dest`` finds, except for a key no
+source provides yet: there the default is the bare git remote repo name
+(``repo`` out of ``owner/repo``), falling back to the destination's basename,
+and ``--key`` overrides it. Fixed targets keep their own key. A ``--key`` the
+resolver could never reach for that destination (neither its remote slug, nor
+its basename, nor its bare repo name) is refused before anything is written:
+the key dir would be dead weight no ``apply`` would ever look at.
+
+Exit codes split by mode. A dry-run follows the ``status`` contract: 0 =
+nothing to create, 1 = files would be created, 2 or more = error. ``--write``
+is a mutating command like ``apply``: 0 on success whether or not it created
+anything, 2 when the destination is unresolvable or the trailing apply fails.
+It never returns 1.
 """
 
 from __future__ import annotations
@@ -20,10 +34,11 @@ import sys
 from pathlib import Path
 from typing import Iterator
 
-from .apply import apply_one
+from .apply import _is_opted_out, apply_one
 from .config import AppConfig
-from .resolve import _git_remote_candidates, resolve_key_dest
-from .sources import _is_junk
+from .manifest import SKIP_FILENAME
+from .resolve import _collect_project_keys, _git_remote_candidates, resolve_key_dest
+from .sources import is_tool_junk
 
 #: Reserved source subdirectory holding the bootstrap skeleton. Like ``_shared``
 #: and ``_rendered`` it is never itself an overlay key.
@@ -39,12 +54,19 @@ def _kebab(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 
-def _template_vars(key: str, dest_root: Path, slug: str | None) -> dict[str, str]:
-    """Resolve the four init variables for *key* at *dest_root*."""
-    remote_slug, _ = _git_remote_candidates(dest_root)
+def _template_vars(
+    key: str, dest_root: Path, slug: str | None, remote_slug: str | None
+) -> dict[str, str]:
+    """Resolve the four init variables for *key* at *dest_root*.
+
+    The slug defaults to the *key*, not to the destination's basename: a
+    worktree or a differently named clone would otherwise seed the memory slug
+    with its directory name, which is the drift ``init`` exists to prevent
+    (``project:beadpot-userlibs`` for a worktree of ``beadpot``).
+    """
     return {
         "key": key,
-        "slug": slug or _kebab(dest_root.name),
+        "slug": slug or _kebab(key),
         "dest": str(dest_root),
         "remote": remote_slug or "",
     }
@@ -61,7 +83,10 @@ def _iter_template_files(template_dir: Path) -> Iterator[Path]:
         if not abs_path.is_file():
             continue
         rel = abs_path.relative_to(template_dir)
-        if _is_junk(rel):
+        # `_is_junk` also drops `.overlay-own` and a key-root `data.toml`: right
+        # for materialisation, wrong here. This copy is source to source, so
+        # those declarations are content a skeleton must be able to seed.
+        if is_tool_junk(rel):
             continue
         yield rel
 
@@ -76,15 +101,33 @@ def bootstrap(
     config: AppConfig,
     only_sources: list[str] | None = None,
     slug: str | None = None,
+    key: str | None = None,
     write: bool = False,
 ) -> int:
     """Instantiate every source's ``_template/`` into ``<source>/<key>/``.
 
-    Dry-run by default: reports the files it would create and exits 1 if any
-    are missing (the ``status`` contract — 0 = nothing to do, 1 = work found or
-    done, ≥2 = error), so a caller can tell whether a bootstrap was needed.
-    ``write=True`` creates the absent files, never clobbering an existing one,
-    then applies the destination so it is live immediately.
+    Dry-run by default: reports the files it would create and follows the
+    ``status`` contract (0 = nothing to create, 1 = files would be created,
+    ≥2 = error), so a caller can tell whether a bootstrap is needed.
+    ``write=True`` is a mutating command like ``apply``: it creates the absent
+    files, never clobbering an existing one, applies the destination so it is
+    live immediately (skipping that step for a destination carrying
+    ``.repo-overlays-skip``, which opted out on purpose), and returns 0 on
+    success (whether or not anything was created) or 2 on error. It never
+    returns 1.
+
+    Args:
+        path: Destination path to bootstrap; resolved to its overlay key.
+        config: Loaded application config.
+        only_sources: Restrict writing to these source names.
+        slug: Override for the ``{{slug}}`` variable.
+        key: Override for the overlay key directory name. Wins over every
+            resolution rule, including a fixed target's own key, but a key the
+            resolver cannot reach for this destination is refused.
+        write: Create the files and apply, instead of reporting a dry-run.
+
+    Returns:
+        The process exit code described above.
     """
     resolved = resolve_key_dest(path, config)
     if resolved is None:
@@ -96,9 +139,36 @@ def bootstrap(
         )
         return 2
 
-    key, dest_root, _is_fixed = resolved
-    variables = _template_vars(key, dest_root, slug)
+    resolved_key, dest_root, is_fixed = resolved
+    project_keys = _collect_project_keys(config)
+    remote_slug, remote_repo = _git_remote_candidates(dest_root)
+    if key is None:
+        if is_fixed or resolved_key in project_keys:
+            key = resolved_key
+        else:
+            # A brand new key. `resolve_key_dest` falls back to the
+            # owner-qualified slug, but hand-made keys are bare names, so
+            # minting the first `owner_repo` one is a silent, permanent naming
+            # divergence; a worktree's basename is wrong for a different reason
+            # (it names the branch, not the repo). The bare remote repo name is
+            # the convention, and `--key` disambiguates a name collision.
+            key = remote_repo or dest_root.name
+    elif not is_fixed:
+        candidates = {c for c in (remote_slug, dest_root.name, remote_repo) if c}
+        if key not in candidates:
+            # An arbitrary --key would produce a key dir that nothing ever
+            # resolves to: refuse before writing, not after leaving dead files.
+            print(
+                f"error: key {key!r} is unreachable from {dest_root}: apply resolves "
+                f"this destination to one of {', '.join(sorted(candidates))}",
+                file=sys.stderr,
+            )
+            return 2
+
+    variables = _template_vars(key, dest_root, slug, remote_slug)
     print(f"init {key} → {dest_root}  (slug: {variables['slug']})")
+    if not is_fixed and key not in project_keys:
+        print(f"  new key: {key} (no source has this key yet; override with --key)")
 
     missing = 0
     for src in config.sources:
@@ -128,13 +198,25 @@ def bootstrap(
             else:
                 print(f"  create: {label}  (dry-run)")
 
-    if not write and missing:
-        print(f"  {missing} file(s) to create — re-run with --write", file=sys.stderr)
-    if write and missing:
-        # The key dir just gained files; apply materialises them into the repo.
-        apply_one(dest_root, config)
+    if not write:
+        if missing:
+            print(f"  {missing} file(s) to create — re-run with --write", file=sys.stderr)
+        return 1 if missing else 0
 
-    return 1 if missing else 0
+    # Mutating run: apply unconditionally, so an already populated key dir is
+    # still materialised into the destination.
+    if _is_opted_out(dest_root):
+        # The destination opted out on purpose; the key dir is still the point.
+        print(f"  skip:   apply ({SKIP_FILENAME} at the destination)")
+        return 0
+    if not apply_one(dest_root, config):
+        print(
+            f"error: nothing materialised at {dest_root} (init wrote key {key}) — "
+            f"check `repo-overlay status {dest_root}`",
+            file=sys.stderr,
+        )
+        return 2
+    return 0
 
 
 def unmanaged_destinations(config: AppConfig) -> list[Path]:

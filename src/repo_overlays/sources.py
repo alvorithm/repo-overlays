@@ -30,6 +30,13 @@ OWN_MARKER = ".overlay-own"
 DATA_FILENAME = "data.toml"
 
 
+def is_tool_junk(rel: Path) -> bool:
+    """True for editor leftovers and tool caches, which no copy should carry."""
+    if rel.name.endswith(_BACKUP_SUFFIXES) or rel.name.startswith(".#"):
+        return True
+    return any(part in _JUNK_DIRS for part in rel.parts)
+
+
 def _is_junk(rel: Path) -> bool:
     """True for editor leftovers, tool caches and markers, which never materialise."""
     if rel.name == OWN_MARKER:
@@ -37,9 +44,7 @@ def _is_junk(rel: Path) -> bool:
     # Only the key-root data.toml is the contract; a nested one is an ordinary file.
     if rel.name == DATA_FILENAME and len(rel.parts) == 1:
         return True
-    if rel.name.endswith(_BACKUP_SUFFIXES) or rel.name.startswith(".#"):
-        return True
-    return any(part in _JUNK_DIRS for part in rel.parts)
+    return is_tool_junk(rel)
 
 
 class SourceStack:
