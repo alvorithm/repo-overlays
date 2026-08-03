@@ -6,7 +6,8 @@ same files) into project worktrees, without committing it upstream.
 ## 1. Functionalities
 
 - **Per-project AI guidance** (`CLAUDE.md`, `AGENTS.md`, `.claude/commands/*.md`,
-  subagents, skills) materialised into any worktree, gitignored at the destination.
+  subagents, skills) materialised into any worktree, excluded from git at the
+  destination through `.git/info/exclude`, never through `.gitignore`.
 - **Fixed-target guidance** (e.g. global `~/.config/claude/CLAUDE.md`, `~/AGENTS.md`)
   materialised into absolute paths.
 - **Shared snippets** (`_shared/*.md`) composed into project overlays via Mustache
@@ -57,7 +58,7 @@ These are the files you may find in a source overlay repo:
 ├── README.md                     # (optional) index page for wiki-like navigation
 ├── _shared/                      # (optional) re-usable snippets for templates
 │   └── python-style.md           
-├── _rendered/                    # (optional) rendered .mo templates; gitignored
+├── _rendered/                    # (optional) rendered .mo templates; in the source's own .gitignore
 ├── _template/                    # (optional) skeleton `repo-overlay init` copies into <key>/
 ├── _claude/                      # fixed target → ~/.config/claude
 │   ├── CLAUDE.md.mo
@@ -644,11 +645,11 @@ files it installs. The strategies below work at the agent-reading level.
 ### 8.1 Naive approach: replace the repo file with a symlink
 
 If you *replace* `AGENTS.md` with a symlink to your overlay-rendered file, the repo's
-original instructions are completely replaced. Use `.gitignore` to keep the symlink out
-of commits:
+original instructions are completely replaced. Keep the symlink out of commits with the
+clone-local exclude file, not with `.gitignore`:
 
 ```
-# .gitignore (local, via .git/info/exclude — never commit this)
+# .git/info/exclude (local to the clone, never committed)
 AGENTS.md
 ```
 
