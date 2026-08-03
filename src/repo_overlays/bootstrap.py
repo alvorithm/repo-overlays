@@ -34,7 +34,7 @@ import sys
 from pathlib import Path
 from typing import Iterator
 
-from .apply import _is_opted_out, apply_one
+from .apply import _dot_rewrite, _is_opted_out, apply_one
 from .config import AppConfig
 from .manifest import SKIP_FILENAME
 from .resolve import _collect_project_keys, _git_remote_candidates, resolve_key_dest
@@ -213,9 +213,17 @@ def bootstrap(
             if out_path.exists():
                 print(f"  ok:     {label}")
                 continue
-            owner = provided.get(_dest_rel(out_rel))
+            dest_rel = _dest_rel(out_rel)
+            owner = provided.get(dest_rel)
             if owner is not None and owner != src.name:
-                print(f"  have:   {_dest_rel(out_rel)} (from {owner})")
+                print(f"  have:   {dest_rel} (from {owner})")
+                continue
+            live = dest_root / (dest_rel if is_fixed else _dot_rewrite(Path(dest_rel)))
+            if live.exists() and not live.is_symlink():
+                # The destination tracks its own file there. `apply` would refuse
+                # to overwrite it on every run, so the skeleton's copy would be
+                # nothing but a permanent warning (penpot's upstream AGENTS.md).
+                print(f"  have:   {dest_rel} (regular file at the destination)")
                 continue
             missing += 1
             if write:

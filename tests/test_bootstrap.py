@@ -249,6 +249,25 @@ def test_init_leaves_a_path_another_source_already_provides(tmp: Path) -> None:
     assert (project / "AGENTS.md").read_text() == "real guidance\n"
 
 
+def test_init_leaves_a_path_the_destination_tracks_itself(tmp: Path) -> None:
+    """A repo that ships its own file at that path keeps it; apply would refuse anyway."""
+    src = make_source(tmp, "guidance")
+    _template(src, "AGENTS.md.mo", "stub for {{key}}\n")
+    _template(src, "dot_claude/skills/x/SKILL.md.mo", "skill for {{key}}\n")
+
+    project = tmp / "myproject"
+    _git_init(project)
+    (project / "AGENTS.md").write_text("upstream's own guidance\n")  # tracked, not a link
+    config = _config(SourceConfig(name="guidance", path=src, private=True))
+
+    assert bootstrap(project, config, write=True) == 0
+    assert not (src / "myproject" / "AGENTS.md.mo").exists()
+    assert (project / "AGENTS.md").read_text() == "upstream's own guidance\n"
+    # The rest of the skeleton still lands, including the dot_ rewrite.
+    assert (src / "myproject" / "dot_claude" / "skills" / "x" / "SKILL.md.mo").is_file()
+    assert (project / ".claude" / "skills" / "x" / "SKILL.md").is_symlink()
+
+
 # ── worktree ────────────────────────────────────────────────────────────────
 
 
