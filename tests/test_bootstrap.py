@@ -223,6 +223,32 @@ def test_init_writes_into_each_sources_own_tree_and_source_filter(tmp: Path) -> 
     assert (a / "myproject" / "AGENTS.md").exists()
 
 
+def test_init_leaves_a_path_another_source_already_provides(tmp: Path) -> None:
+    """The skeleton never duplicates a file another source contributes for the key.
+
+    Two sources on one destination path is a whole-file override, so a stub
+    copied next to real content would shadow it or lose silently. This is what
+    makes backfilling an existing key with a newly shipped template safe.
+    """
+    a = make_source(tmp, "guidance")
+    b = make_source(tmp, "wiki")
+    _template(a, "AGENTS.md.mo", "stub for {{key}}\n")
+    (b / "myproject").mkdir()
+    (b / "myproject" / "AGENTS.md.mo").write_text("real guidance\n")
+
+    project = tmp / "myproject"
+    _git_init(project)
+    config = _config(
+        SourceConfig(name="guidance", path=a),
+        SourceConfig(name="wiki", path=b),
+    )
+
+    assert bootstrap(project, config) == 0  # dry run: nothing left to create
+    assert bootstrap(project, config, write=True) == 0
+    assert not (a / "myproject").exists()
+    assert (project / "AGENTS.md").read_text() == "real guidance\n"
+
+
 # ── worktree ────────────────────────────────────────────────────────────────
 
 

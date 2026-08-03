@@ -252,7 +252,10 @@ repo-overlay init <path> --key beadpot --write   # force the key name
   never an overlay key). Its layout mirrors `<source>/<key>/`, using the same
   `dot_` names. Each source owns its own skeleton — `memory-bus` the memory
   wiring, `defaults` the guidance — so `init` walks the stack and writes each
-  source's template into that source's tree only.
+  source's template into that source's tree only. A skeleton is instantiated
+  for **every** key `init` touches, not only the keys that source already
+  serves, so it must hold what that source would own for any repo; project
+  text belongs in the key directory instead.
 - **Variables**, substituted in file paths and bodies: `{{key}}` (resolved
   overlay key), `{{slug}}` (`--slug`, else the kebab-cased key, so a worktree or
   a differently named clone does not seed its directory name), `{{dest}}`
@@ -286,11 +289,16 @@ repo-overlay init <path> --key beadpot --write   # force the key name
   returned. `--slug` plays no part in this: it is the memory/project slug
   substituted into `{{slug}}`, unrelated to the key.
 - **Dry-run by default**, and a dry-run never writes. `--write` creates only
-  absent files (a hand-edited one is never clobbered, it is reported `ok:`) and
-  then *always* applies the destination, even when every template file already
-  existed. So `init --write` is also the repair command for a key directory
-  that was hand-made and never applied. Re-running after adding a template file
-  backfills exactly that file.
+  absent files and then *always* applies the destination, even when every
+  template file already existed. So `init --write` is also the repair command
+  for a key directory that was hand-made and never applied, and re-running
+  after adding a template file backfills exactly that file. Two kinds of file
+  are left alone: one that already exists in the key directory (`ok:`, so a
+  hand-edited file is never clobbered) and one whose destination path another
+  source already provides for that key (`have:`, since two sources on one path
+  is a whole-file override, and the skeleton must not shadow real content).
+  That second rule is what makes shipping a new `_template/` file and sweeping
+  it across existing keys safe.
 - **Worktrees.** The destination is resolved exactly as `apply` resolves it
   (`resolve_key_dest`), so a linked worktree bootstraps its *repo's* key once,
   not one per worktree.

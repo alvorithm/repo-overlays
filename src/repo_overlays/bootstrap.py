@@ -38,7 +38,7 @@ from .apply import _is_opted_out, apply_one
 from .config import AppConfig
 from .manifest import SKIP_FILENAME
 from .resolve import _collect_project_keys, _git_remote_candidates, resolve_key_dest
-from .sources import is_tool_junk
+from .sources import SourceStack, is_tool_junk
 
 #: Reserved source subdirectory holding the bootstrap skeleton. Like ``_shared``
 #: and ``_rendered`` it is never itself an overlay key.
@@ -89,6 +89,28 @@ def _iter_template_files(template_dir: Path) -> Iterator[Path]:
         if is_tool_junk(rel):
             continue
         yield rel
+
+
+def _dest_rel(rel: Path) -> str:
+    """Destination-relative path *rel* materialises to, ``.mo`` suffix dropped."""
+    text = rel.as_posix()
+    return text[:-3] if text.endswith(".mo") else text
+
+
+def _already_provided(key: str, config: AppConfig) -> dict[str, str]:
+    """Map destination-relative path to the source name providing it for *key*.
+
+    A skeleton must not duplicate a file another source already contributes:
+    two sources on one path is a whole-file override, so the template's copy
+    would either lose silently or shadow the real content. Backfilling an
+    existing key is the normal case (``init`` is idempotent), so this is what
+    makes it safe.
+    """
+    stack = SourceStack(config)
+    provided: dict[str, str] = {}
+    for abs_path, src in stack.iter_files_for_key(key, report_overrides=False):
+        provided[_dest_rel(abs_path.relative_to(src.path / key))] = src.name
+    return provided
 
 
 def _rel_repr(source_path: Path, key: str, out_rel: Path) -> str:
@@ -170,6 +192,7 @@ def bootstrap(
     if not is_fixed and key not in project_keys:
         print(f"  new key: {key} (no source has this key yet; override with --key)")
 
+    provided = _already_provided(key, config)
     missing = 0
     for src in config.sources:
         requested = only_sources is None or src.name in only_sources
@@ -189,6 +212,10 @@ def bootstrap(
             label = _rel_repr(src.path, key, out_rel)
             if out_path.exists():
                 print(f"  ok:     {label}")
+                continue
+            owner = provided.get(_dest_rel(out_rel))
+            if owner is not None and owner != src.name:
+                print(f"  have:   {_dest_rel(out_rel)} (from {owner})")
                 continue
             missing += 1
             if write:
