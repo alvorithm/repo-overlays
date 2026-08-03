@@ -142,7 +142,8 @@ See below for `repo-overlay` subcommands other than `apply`.
 
 An agent may edit a file in the target repo via the symbolic link there ("live file"). For example, it may edit its own instructions, `~/Code/beadpot/CLAUDE.md`, or update local project documentation after some changes, e.g. `~/Code/beadpot/local/docs/pydantic_models.md`.
 
-These external changes are handled at `apply`-time (whether automatically or manually triggered, see above).compares the files with a current render of its sources.
+Every `apply`, automatic or manual (see above), compares these external changes with a
+current render of their sources.
 
 If the live file differs from fresh render, the fresh render is written to `<live>.proposed`; a `.divergent` marker is set and a desktop notification fires. The live file is **not** erased.
 
