@@ -11,7 +11,7 @@ from .apply import apply_all, apply_one, tracked_links
 from .config import TOP_LEVEL_CONFIG, AppConfig, load_config
 from .manifest import divergent_markers, read as read_manifest
 from .promote import promote
-from .render import lint_data_refs, render_bytes, render_hash, render_text, resolve_template_text
+from .render import lint_data_refs, render_hash, render_text, resolve_template_text
 from .resolve import iter_all_destinations, resolve_key_dest
 from .sources import SourceStack
 from .watch import watch
@@ -97,6 +97,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         config,
         only_sources=args.source or None,
         slug=args.slug,
+        key=args.key,
         write=args.write,
     )
 
@@ -283,7 +284,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--source", action="append", metavar="NAME",
         help="Limit to this source (repeatable; default: every source with a _template/)",
     )
-    ip.add_argument("--slug", help="Slug for {{slug}} (default: kebab-cased basename)")
+    ip.add_argument(
+        "--slug",
+        help="Memory/project slug for {{slug}}, not the key (default: kebab-cased key)",
+    )
+    ip.add_argument("--key", help="Overlay key directory name (default: bare remote repo name, else basename)")
     ip.add_argument(
         "--write", action="store_true",
         help="Create the missing files (default: dry-run), then apply the destination",
