@@ -31,8 +31,8 @@ same files) into project worktrees, without committing it upstream.
   yet and applies it, so setting a repo up costs one command; `repo-overlay
   status --unmanaged` lists the git repos under the watched roots that no key
   covers at all (§5 `init`).
-- **Multi-source composition**: stack several overlay repos (private +
-  public/Codeberg-wiki) so collaborators can contribute to one without seeing the
+- **Multi-source composition**: stack several overlay repos (a private one plus a
+  public one) so collaborators can contribute to one without seeing the
   others.
 
 ## 2. Concepts
@@ -55,7 +55,7 @@ These are the files you may find in a source overlay repo:
 ```
 <overlay>/
 ├── config.toml                   # how to resolve fixed & project (see below)
-├── README.md                     # (optional) index page for wiki-like navigation
+├── README.md                     # (optional) entry point for human readers
 ├── _shared/                      # (optional) re-usable snippets for templates
 │   └── python-style.md           
 ├── _rendered/                    # (optional) rendered .mo templates; in the source's own .gitignore
@@ -161,11 +161,11 @@ template or partial), accept the agent-proposed, or keep current.
 > [!WARNING]
 > This section is unnecessarily verbose, trim
 
-A Markdown link in an overlay file is read in (up to) three places: the source repo, the target repo or on the web, in Codeberg. The link is resolved differently:
+A Markdown link in an overlay file is read in (up to) three places: the source repo, the target repo, or the source repo's web view on whatever forge hosts it. The link is resolved differently:
 
 - source `<overlay>/<key>/…`: human author in their editor
 - target `<target>/…` — agent reading the live symlink
-- Codeberg `https://codeberg.org/<user>/<overlay>/src/branch/main/<key>/…`: collaborator on web
+- web `<forge>/<user>/<overlay>/…/<key>/…`: collaborator on web
 
 repo-overlays mirrors `<overlay>/<key>/<rel>` to `<target>/<rel>` (modulo `dot_X` → `.X`). The *prefix* differs by context but the *suffix inside the key* is identical, so most relative links resolve to the right file in all three views with no extra effort. There is no `{{base_path}}` template variable — the value would have to differ per destination, and a template is rendered only once, shared by every destination of the key. Data-driven values are key-scoped (`data.toml`) for exactly that reason: the key is the shared scope.
 
@@ -178,7 +178,7 @@ From `<overlay>/beadpot/CLAUDE.md.mo` linking to `<overlay>/beadpot/local/docs/a
 See [architecture](local/docs/architecture.md).
 ```
 
-Resolves to `<overlay>/beadpot/local/docs/architecture.md` in source, `<target>/local/docs/architecture.md` in target, and stays within the source repo on Codeberg. The same pattern works for any depth, as long as both endpoints live under the same key.
+Resolves to `<overlay>/beadpot/local/docs/architecture.md` in source, `<target>/local/docs/architecture.md` in target, and stays within the source repo on the web. The same pattern works for any depth, as long as both endpoints live under the same key.
 
 #### Pattern 2 — shared snippets are inlined, not linked
 
@@ -188,7 +188,7 @@ For content reused across keys, use partial inclusion rather than a link:
 {{>_shared/python-style.md}}
 ```
 
-The reader of the rendered file sees the content directly — no link to break. If a navigational "see also" link to a partial is useful for the human author, write `[python style](../_shared/python-style.md)`: it works in source and Codeberg but is broken in target (partials are not materialised as separate files).
+The reader of the rendered file sees the content directly — no link to break. If a navigational "see also" link to a partial is useful for the human author, write `[python style](../_shared/python-style.md)`: it works in source and on the web but is broken in target (partials are not materialised as separate files).
 
 #### Pattern 3 — links to target-only files
 
@@ -198,21 +198,21 @@ To link from an overlay file to a file that lives only in the target (e.g. proje
 See [the page module](common/src/app/common/types/page.cljc).
 ```
 
-This resolves in the target. It is broken in source and Codeberg because the file is not in the overlay repo. That is acceptable: only the agent navigates these links at runtime.
+This resolves in the target. It is broken in source and on the web because the file is not in the overlay repo. That is acceptable: only the agent navigates these links at runtime.
 
-#### Pattern 4 — cross-source references (Codeberg URLs)
+#### Pattern 4 — cross-source references (full URLs)
 
-To link from one overlay source to a file in a *different* overlay source, use a full URL:
+To link from one overlay source to a file in a *different* overlay source, use a full URL to that source's web view:
 
 ```markdown
-[python style](https://codeberg.org/alvorithm/beadpot-docs/src/branch/main/_shared/python-style.md)
+[python style](https://<forge>/<user>/beadpot-docs/.../_shared/python-style.md)
 ```
 
-These open the browser in every context. They require network and bind the link to a particular branch — use them sparingly.
+These open the browser in every context. They require network and bind the link to a particular branch (and to a particular forge's URL shape) — use them sparingly.
 
-#### Templates and Codeberg rendering
+#### Templates and web rendering
 
-Codeberg's source view renders `.md` files as Markdown (with working relative links) but shows `.mo` templates as plain text. If a file needs both partial composition *and* Codeberg-friendly rendering, keep it as plain `.md` and use a separate orchestrating `.mo` template that includes it via `{{>…}}`. The `.md` reads cleanly on Codeberg; the `.mo` produces the final composed output in the target.
+A forge's source view renders `.md` files as Markdown, with working relative links, but shows `.mo` templates as plain text. If a file needs both partial composition *and* readable rendering on the web, keep it as plain `.md` and use a separate orchestrating `.mo` template that includes it via `{{>…}}`. The `.md` reads cleanly in the browser; the `.mo` produces the final composed output in the target.
 
 ## 5. Commands
 
@@ -499,8 +499,7 @@ A target repo may receive overlays with different audiences and lifecycles:
 - Personal global guidance and personal-project overlays should stay on your machine (or
   a private remote).
 - Domain or open-source-project guidance (e.g. `beadpot/`, `penpot/` and the partials
-  they share) benefit from being public, versioned, and editable by collaborators —
-  including via a Git-backed wiki UI.
+  they share) benefit from being public, versioned, and editable by collaborators.
 
 `repo-overlays` composes any number of sources into one destination set.
 
@@ -517,8 +516,8 @@ private = true                       # never referenced from public output
 
 [[sources]]
 name = "beadpot-docs"
-path = "~/Overlays/beadpot-docs"    # local clone of a Codeberg wiki repo
-remote = "git@codeberg.org:<user>/beadpot-docs.git"
+path = "~/Overlays/beadpot-docs"    # local clone of a public docs repo
+remote = "git@<forge>:<user>/beadpot-docs.git"
 ```
 
 Each source's own `config.toml` still declares its `[targets]` and `watched_roots`; the
@@ -540,7 +539,7 @@ top-level file only enumerates and orders sources.
 
 ### 6.3 Editing a public source via the web
 
-Just share on Codeberg as a regular git repo. While it would be useful to leverage wiki-specific functionality (e.g. `Home.md` and `_Sidebar.md` for navigation), wikis in Codeberg are flat: all `.md` files live on the repo root, which makes e.g. `_shared` invisible for editing and viewing. 
+Just share the source as a regular git repo on any forge. A source is an ordinary directory tree, so nothing here depends on a forge feature beyond browsing and editing files: `_shared/` and every key directory keep their nesting on the web exactly as on disk.
 
 Use a `README.md` file to:
 - explain what the project is, how to contribute,
@@ -549,13 +548,13 @@ Use a `README.md` file to:
 Like any other files at the overlay root, README is *not* materialized anywhere as agent
 guidance.
 
-The file tree widget and search allow to find any content, but it is good practice to cross-reference related files wiki-style. See §4.3 for link patterns that work simultaneously in the source repo, the target worktree, and the Codeberg source view.
+The file tree and search find any content, but it is good practice to cross-reference related files. See §4.3 for link patterns that work simultaneously in the source repo, the target worktree, and the web view.
 
 ### 6.4 Contributor workflows
 
-A collaborator who only needs to edit the public docs may just edit pages directly in the Codeberg UI. Alternatively, they can edit via command line: 
+A collaborator who only needs to edit the public docs may just edit files directly in the forge's web editor. Alternatively, they can edit via command line: 
 ```sh
-git clone git@codeberg.org:you/beadpot-docs.git
+git clone git@<forge>:you/beadpot-docs.git
 $EDITOR beadpot/CLAUDE.md.mo _shared/penpot-data-model.md
 git commit -am "..."
 git push
