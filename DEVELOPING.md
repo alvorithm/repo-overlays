@@ -21,7 +21,7 @@ src/repo_overlays/
 ├── render.py     # render *.mo by recursive {{>ref}} substitution with _PartialLoader;
 │                 # drift detection; writes _rendered/<source>/<key>/<rel>
 ├── apply.py      # walk stack for each key, call render or symlink verbatim, dot_rewrite
-│                 # for project overlays; skip silently (_already_applied) on re-entry;
+│                 # for project overlays; skip silently (_already_applied) when current;
 │                 # catch missing partials and continue; prune manifest on re-apply
 ├── manifest.py   # read/write/prune <dest_root>/.repo-overlays.toml (tomllib/tomli_w)
 ├── bootstrap.py  # repo-overlay init: seed <source>/<key>/ from each source's _template/,
@@ -73,7 +73,9 @@ for each (key, dest_root, is_fixed):
 
 **Failure containment** — `_apply_key()` reports and skips per-file `OSError` (source → destination, error type); `_apply_and_record()` wraps the whole per-destination apply in the same net. One unwritable or malformed destination never aborts a sweep over the others.
 
-**Skip on re-entry** — `_already_applied()` (apply.py) checks the manifest before printing. If the destination already has a valid manifest with all symlinks in place, `apply_one` returns silently. Prevents noisy output on every `cd` into an already-applied repo.
+**Skip when current** — `_already_applied()` (apply.py) checks the manifest before printing. If the destination already has a valid manifest with all symlinks in place, both `apply_one` and `apply_all` return silently. For `apply_one` this prevents noisy output on every `cd`; for `apply_all` it is load-bearing, because `_apply_and_record` rewrites a manifest and an `info/exclude` block per destination, and a watched destination turns that write into the next sweep's trigger. A planned path the destination holds as a *regular file* counts as accounted for (`_blocks_a_link()`): `_apply_key` refuses to overwrite one, so a fresh apply is genuinely a no-op there, and treating it as a missing link left every repo with its own bundled `AGENTS.md` permanently "not applied".
+
+**Bounded watch growth** — `_watch_created_dir()` (watch.py) watches a directory created after startup, but only within the descent budget its parent watch carries (`_collect_watch_paths` hands out `_SOURCE_DEPTH` for source trees and `_TOP_LEVEL_ONLY` for `watched_roots` and source parents). Unbounded, the set had no ceiling: each new directory granted the right to watch its own children, so one clone under a watched root pulled a whole checkout in (measured: 166 → 1141 watches, most of it `node_modules`), and any destination caught that way closed a feedback loop with the manifest write above. `_should_ignore()` filters this tool's own artifacts (manifest, `.proposed`, `.divergent`) as a second line of defence; `.repo-overlays-skip` is deliberately *not* filtered, since creating one must trigger the withdrawal.
 
 **Regular-file guard** — `_apply_key()` skips any destination path that is a regular (non-symlink) file with a warning. It will never silently overwrite a committed project file.
 

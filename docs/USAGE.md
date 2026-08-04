@@ -411,6 +411,14 @@ are watched at their top level, so renaming a repo inside one is caught, but
 moves deeper inside a repo are not. A move across filesystems arrives as an
 unpaired delete + create and is not a rename at all — inotify gives no cookie.
 
+A directory created after startup is watched as it appears, but only within
+that same scope: a new `_shared/mcp/` inside a source is picked up, while a
+repo cloned into a `watched_root` is not descended into. The bound is what
+keeps the watch set the size this section describes however long the daemon
+runs, and it is what stops a destination from ever being watched. A watched
+destination would make each apply's own manifest write the trigger for the
+next apply.
+
 On a successful apply you'll see output like:
 ```
 Overlay beadpot (defaults, beadpot-docs) → ~/Code/beadpot
@@ -420,6 +428,10 @@ Overlay _claude (defaults) → ~/.config/claude
 * Source names in parentheses show which repos contribute to the key.
 * Paths abbreviate `$HOME` as `~` for readability.
 * Missing partials are reported but don't block other overlay keys.
+* A destination already materialised is skipped and prints nothing, so a
+  sweep with no work to do is silent and writes nothing at all. `repo-overlay
+  apply` over a current tree therefore produces no output, the same way
+  re-entering an already-applied repo does.
 
 ## Debugging
 
