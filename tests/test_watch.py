@@ -103,19 +103,19 @@ def test_created_directory_gets_a_watch(tmp: Path) -> None:
     new overlay key would otherwise be invisible to inotify until the watcher
     restarted — partial edits inside it would never re-apply.
     """
-    from repo_overlays.watch import _IN_CREATE, _IN_ISDIR, _SOURCE_DEPTH, _watch_created_dir
+    from repo_overlays.watch import _IN_CREATE, _IN_ISDIR, _UNBOUNDED, _watch_created_dir
 
     src = tmp / "Overlays" / "defaults"
     src.mkdir(parents=True)
     (src / "_shared").mkdir()  # the event follows the on-disk mkdir
     wd_paths = {1: src}
-    wd_budget = {1: _SOURCE_DEPTH}
+    wd_budget = {1: _UNBOUNDED}
 
     ino = _Inotify()
     _watch_created_dir(_Event(1, _IN_CREATE | _IN_ISDIR, 0, "_shared"), wd_paths, wd_budget, ino)
     assert wd_paths[2] == src / "_shared"
     assert ino.watched == [(str(src / "_shared"), _WATCH_FLAGS)]
-    assert wd_budget[2] == _SOURCE_DEPTH - 1, "the new watch spends one level"
+    assert wd_budget[2] is _UNBOUNDED, "a source tree's claim carries down"
 
     # File creates and ignored dirs (git dirs, render output) must not add watches.
     _watch_created_dir(_Event(1, _IN_CREATE, 0, "note.md"), wd_paths, wd_budget, ino)
@@ -152,33 +152,95 @@ def test_repo_created_under_a_watched_root_is_not_descended_into(tmp: Path) -> N
     assert 2 not in wd_paths
 
 
-def test_descent_budget_runs_out_at_the_walk_depth(tmp: Path) -> None:
-    """Growth below a source stops where the initial walk stops.
+def test_a_source_is_watched_to_any_depth(tmp: Path) -> None:
+    """A note filed deep inside a key still reaches the watcher.
 
-    Otherwise the set has no ceiling: every new subdirectory grants the right
-    to watch its own subdirectories, for as long as the daemon runs.
+    Regression: the walk stopped at depth 3, which cuts through the house
+    layout for working notes (`<key>/work/wf-now/<branch>/`, depth 4). Files
+    there fire events at their own directory, so a cap there is a silent hole:
+    the edit never re-applies, and nothing reports the omission.
     """
-    from repo_overlays.watch import _IN_CREATE, _IN_ISDIR, _SOURCE_DEPTH, _watch_created_dir
+    from repo_overlays.watch import _IN_CREATE, _IN_ISDIR, _UNBOUNDED, _watch_created_dir
 
-    src = tmp / "Overlays" / "defaults"
-    deep = src / "a" / "b" / "c" / "d"
-    deep.mkdir(parents=True)
+    src = tmp / "Overlays" / "beadpot-docs"
+    branch_dir = src / "beadpot" / "work" / "wf-now" / "feature-x" / "detail"
+    branch_dir.mkdir(parents=True)
 
     ino = _Inotify()
-    wd_paths, wd_budget = {1: src}, {1: _SOURCE_DEPTH}
-    wd, here = 1, src
-    for name in ("a", "b", "c", "d"):
-        _watch_created_dir(_Event(wd, _IN_CREATE | _IN_ISDIR, 0, name), wd_paths, wd_budget, ino)
-        here = here / name
-        if here not in wd_paths.values():
-            break
-        wd = next(k for k, v in wd_paths.items() if v == here)
+    wd_paths, wd_budget = {1: src}, {1: _UNBOUNDED}
 
-    assert [p for p, _m in ino.watched] == [
-        str(src / "a"),
-        str(src / "a" / "b"),
-        str(src / "a" / "b" / "c"),
-    ], "three levels below the source, then nothing"
+    # One event for the top of the new tree, as `mkdir -p` delivers it.
+    added = _watch_created_dir(
+        _Event(1, _IN_CREATE | _IN_ISDIR, 0, "beadpot"), wd_paths, wd_budget, ino
+    )
+
+    assert added is True, "the caller needs to know an apply is owed"
+    watched = {p for p, _m in ino.watched}
+    assert watched == {
+        str(src / "beadpot"),
+        str(src / "beadpot" / "work"),
+        str(src / "beadpot" / "work" / "wf-now"),
+        str(src / "beadpot" / "work" / "wf-now" / "feature-x"),
+        str(branch_dir),
+    }, "the whole subtree, at any depth"
+
+
+def test_a_tree_created_in_one_go_is_caught_up(tmp: Path) -> None:
+    """`mkdir -p a/b/c` loses a race that only a catch-up walk can win.
+
+    The CREATE of `a` reaches the watcher after `b` and `c` already exist, so
+    their own CREATEs went to watches that did not exist yet. Watching `a`
+    alone leaves the tree half-seen: a note written into `c` fires nothing,
+    never materialises, and nothing reports the omission. Observed live on
+    `mkdir -p <source>/<key>/work/wf-now/<branch>`.
+    """
+    from repo_overlays.watch import _IN_CREATE, _IN_ISDIR, _UNBOUNDED, _watch_created_dir
+
+    src = tmp / "Overlays" / "defaults"
+    (src / "keydir" / "work" / "wf-now" / "branch-x").mkdir(parents=True)
+
+    ino = _Inotify()
+    wd_paths, wd_budget = {1: src}, {1: _UNBOUNDED}
+    # Only the top directory's event ever arrives; the rest were lost.
+    _watch_created_dir(_Event(1, _IN_CREATE | _IN_ISDIR, 0, "keydir"), wd_paths, wd_budget, ino)
+
+    assert str(src / "keydir" / "work" / "wf-now" / "branch-x") in {p for p, _m in ino.watched}
+
+
+def test_initial_walk_covers_a_deep_source_but_not_a_watched_root(tmp: Path) -> None:
+    """The two tree kinds get opposite treatment, and the walk proves it."""
+    from repo_overlays.config import AppConfig, SourceConfig
+    from repo_overlays.watch import _TOP_LEVEL_ONLY, _UNBOUNDED, _collect_watch_paths
+
+    src = make_source(tmp, "defaults", watched_roots=[str(tmp / "Code")])
+    deep = src / "beadpot" / "work" / "wf-now" / "feature-x"
+    deep.mkdir(parents=True)
+    (tmp / "Code" / "somerepo" / "node_modules" / "pkg").mkdir(parents=True)
+
+    config = AppConfig(
+        sources=[SourceConfig(name="defaults", path=src, watched_roots=[tmp / "Code"])]
+    )
+    got = dict(_collect_watch_paths(config))
+
+    assert got[deep] is _UNBOUNDED, "a source is watched whole"
+    assert got[tmp / "Code"] == _TOP_LEVEL_ONLY
+    assert tmp / "Code" / "somerepo" not in got, "a repo under a watched_root is not watched"
+    assert not any("node_modules" in str(p) for p in got)
+
+
+def test_a_symlink_loop_inside_a_source_terminates(tmp: Path) -> None:
+    """An unbounded walk must not recurse forever through a self-referring link."""
+    from repo_overlays.config import AppConfig, SourceConfig
+    from repo_overlays.watch import _collect_watch_paths
+
+    src = make_source(tmp, "defaults")
+    (src / "keydir").mkdir()
+    (src / "keydir" / "loop").symlink_to(src, target_is_directory=True)
+
+    config = AppConfig(sources=[SourceConfig(name="defaults", path=src)])
+    got = dict(_collect_watch_paths(config))
+
+    assert src / "keydir" in got
 
 
 def test_own_manifest_write_is_not_an_event(tmp: Path) -> None:

@@ -31,7 +31,7 @@ _IN_ISDIR = 0x40000000
 _IN_CREATE = 0x00000100
 
 _DEBOUNCE_S = 0.2
-_EXCLUDE_PARTS = frozenset([".git", "_rendered", "__pycache__"])
+_EXCLUDE_PARTS = frozenset([".git", "_rendered", "__pycache__", "node_modules", ".venv"])
 # Artifacts an apply writes into destinations. Every destination gets a
 # manifest, so a watch on one would otherwise turn each apply into the trigger
 # for the next: the daemon would rewrite the same manifests forever and never
@@ -39,12 +39,26 @@ _EXCLUDE_PARTS = frozenset([".git", "_rendered", "__pycache__"])
 _EXCLUDE_NAMES = frozenset([MANIFEST_FILENAME, ".divergent"])
 _EXCLUDE_SUFFIXES = (".swp", "~", ".proposed")
 
-# How far below a watch a directory created later may still be watched. Source
-# trees get the depth the initial walk uses; everything else is watched at its
-# top level only, so a repo cloned into a watched_root never drags its own
-# tree (node_modules included) into the watch set.
-_SOURCE_DEPTH = 3
+# How far below a watch a directory created later may still be watched.
+#
+# A source tree is watched whole. It is small (238 directories across the six
+# sources on this machine), every directory in it is hand-authored, and filing
+# a note four levels inside a key (`<key>/work/wf-now/<branch>/`) is ordinary
+# use. A cap here is a silent hole: the edit fires no event, so the file never
+# materialises until something else runs an apply.
+#
+# A watched_root gets nothing below its top level. That is where the size is,
+# and where the destinations are: a watched destination makes apply's own
+# manifest write the trigger for the next apply.
+_UNBOUNDED: int | None = None
 _TOP_LEVEL_ONLY = 0
+
+
+def _wider(a: int | None, b: int | None) -> int | None:
+    """Return the more permissive of two descent budgets (None is unbounded)."""
+    if a is _UNBOUNDED or b is _UNBOUNDED:
+        return _UNBOUNDED
+    return max(a, b)  # ty: ignore[invalid-argument-type]
 
 
 def _should_ignore(path: str) -> bool:
@@ -60,23 +74,26 @@ def _should_ignore(path: str) -> bool:
     )
 
 
-def _collect_watch_paths(config: AppConfig) -> list[tuple[Path, int]]:
+def _collect_watch_paths(config: AppConfig) -> list[tuple[Path, int | None]]:
     """Return every directory to watch, each with its remaining descent budget.
 
     The budget is how deep a directory created *later* may still be watched
     below this one. It mirrors the initial walk, so the watch set stays the
     shape this function describes however long the daemon runs.
     """
-    paths: list[tuple[Path, int]] = []
+    paths: list[tuple[Path, int | None]] = []
 
-    def _add_tree(root: Path, depth: int = _SOURCE_DEPTH) -> None:
+    def _add_tree(root: Path, depth: int | None = _UNBOUNDED) -> None:
         if not root.is_dir() or _should_ignore(str(root)):
             return
         paths.append((root, depth))
-        if depth > 0:
+        if depth is _UNBOUNDED or depth > 0:
             for child in root.iterdir():
-                if child.is_dir():
-                    _add_tree(child, depth - 1)
+                # Symlinked directories are not followed, here or in
+                # `_watch_tree`: the walk is unbounded for a source, so a link
+                # back to an ancestor would recurse until the stack gives out.
+                if child.is_dir() and not child.is_symlink():
+                    _add_tree(child, depth if depth is _UNBOUNDED else depth - 1)
 
     for src in config.sources:
         _add_tree(src.path)
@@ -95,9 +112,48 @@ def _collect_watch_paths(config: AppConfig) -> list[tuple[Path, int]]:
     return paths
 
 
+def _watch_tree(
+    root: Path,
+    budget: int | None,
+    wd_paths: dict[int, Path],
+    wd_budget: dict[int, int | None],
+    inotify,
+) -> int:
+    """Watch *root* and every subdirectory of it already on disk. Returns the count.
+
+    The descendants matter because of a race that `mkdir -p a/b/c`, `git
+    clone` and `cp -r` all lose: the CREATE of `a` reaches us only after `b`
+    and `c` exist, and their own CREATEs went to a watch that did not exist
+    yet. Watching just `a` would leave the tree permanently half-seen, so the
+    catch-up walk is the only way a directory tree created in one go ends up
+    fully watched.
+    """
+    if _should_ignore(str(root)) or not root.is_dir():
+        return 0
+    try:
+        wd = inotify.add_watch(str(root), _WATCH_FLAGS)
+    except OSError:
+        return 0
+    wd_paths[wd] = root
+    wd_budget[wd] = _wider(wd_budget.get(wd), budget)
+    added = 1
+    if budget is _UNBOUNDED or budget > 0:
+        child_budget = budget if budget is _UNBOUNDED else budget - 1
+        try:
+            children = sorted(root.iterdir())
+        except OSError:
+            return added
+        for child in children:
+            # Symlinked directories are not followed: an unbounded walk would
+            # otherwise recurse through a link back to an ancestor.
+            if child.is_dir() and not child.is_symlink():
+                added += _watch_tree(child, child_budget, wd_paths, wd_budget, inotify)
+    return added
+
+
 def _watch_created_dir(
-    event, wd_paths: dict[int, Path], wd_budget: dict[int, int], inotify
-) -> None:
+    event, wd_paths: dict[int, Path], wd_budget: dict[int, int | None], inotify
+) -> bool:
     """Watch a directory created after startup, so edits inside it re-apply.
 
     The initial watch set is a one-shot walk; a directory that appears later
@@ -107,27 +163,25 @@ def _watch_created_dir(
 
     The parent's descent budget bounds this, and the bound is the whole point:
     a watched_root is watched at its top level, so the repos under it stay
-    unwatched however they are created, while a source tree spends one level
-    per step exactly as the initial walk does. Unbounded, one `git clone` or
-    one `pnpm install` under a watched root pulls a whole checkout into the
-    watch set, and any destination watched that way makes the tool's own
-    manifest write the trigger for the next apply.
+    unwatched however they are created, while a source tree carries the same
+    unbounded claim the initial walk gives it. Without the bound, one `git
+    clone` or one `pnpm install` under a watched root pulls a whole checkout
+    into the watch set, and any destination watched that way makes the tool's
+    own manifest write the trigger for the next apply.
+
+    Returns True if any watch was added, which the caller treats as an event
+    in its own right: the files that arrived during the race fired nothing, so
+    the apply that materialises them has to be scheduled here.
     """
     if not (event.mask & _IN_ISDIR) or not (event.mask & (_IN_CREATE | _IN_MOVED_TO)):
-        return
+        return False
     parent = wd_paths.get(event.wd)
     budget = wd_budget.get(event.wd, _TOP_LEVEL_ONLY)
-    if parent is None or budget <= 0:
-        return
-    new_dir = parent / event.name
-    if _should_ignore(str(new_dir)) or not new_dir.is_dir():
-        return
-    try:
-        wd = inotify.add_watch(str(new_dir), _WATCH_FLAGS)
-    except OSError:
-        return
-    wd_paths[wd] = new_dir
-    wd_budget[wd] = budget - 1
+    if parent is None or (budget is not _UNBOUNDED and budget <= 0):
+        return False
+    child_budget = budget if budget is _UNBOUNDED else budget - 1
+    added = _watch_tree(parent / event.name, child_budget, wd_paths, wd_budget, inotify)
+    return added > 0
 
 
 def _note_rename(event, wd_paths: dict[int, Path], pending: dict[int, Path]) -> None:
@@ -170,7 +224,7 @@ def watch(config: AppConfig, once: bool = False) -> None:
     inotify = inotify_simple.INotify()
     watch_paths = _collect_watch_paths(config)
     wd_paths: dict[int, Path] = {}
-    wd_budget: dict[int, int] = {}
+    wd_budget: dict[int, int | None] = {}
     for path, budget in watch_paths:
         try:
             # Raw mask, not a library constant: inotify_simple ≥2.0 moved
@@ -181,9 +235,9 @@ def watch(config: AppConfig, once: bool = False) -> None:
             continue
         wd_paths[wd] = path
         # One directory can arrive twice (a source that is also a watched_root)
-        # and inotify returns the same wd for both. Keep the larger budget, so
+        # and inotify returns the same wd for both. Keep the wider budget, so
         # the recursive claim wins over the top-level one.
-        wd_budget[wd] = max(wd_budget.get(wd, _TOP_LEVEL_ONLY), budget)
+        wd_budget[wd] = _wider(wd_budget.get(wd, _TOP_LEVEL_ONLY), budget)
 
     pending = False
     last_event_t = 0.0
@@ -191,12 +245,16 @@ def watch(config: AppConfig, once: bool = False) -> None:
 
     while True:
         events = inotify.read(timeout=int(_DEBOUNCE_S * 1000))
+        watched_more = False
         for e in events:
             _note_rename(e, wd_paths, pending_moves)
-            _watch_created_dir(e, wd_paths, wd_budget, inotify)
+            watched_more |= _watch_created_dir(e, wd_paths, wd_budget, inotify)
         if events:
+            # A directory tree that appears in one go keeps re-arming the
+            # debounce as its subdirectories are caught up, so the apply lands
+            # after the last file, not in the middle of the copy.
             relevant = [e for e in events if not _should_ignore(e.name)]
-            if relevant:
+            if relevant or watched_more:
                 pending = True
                 last_event_t = time.monotonic()
 
