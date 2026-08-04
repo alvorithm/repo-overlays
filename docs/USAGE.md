@@ -405,19 +405,28 @@ records — and each of those consumers knows its own substrate. Ours records th
 fact; they decide what it means. The memory system, for instance, consumes
 `rename` lines with `curate.py paths --from-log`.
 
-Scope: sources are watched recursively (depth 3) and their parent directory
-non-recursively, so renaming a source directory itself is caught; `watched_roots`
-are watched at their top level, so renaming a repo inside one is caught, but
-moves deeper inside a repo are not. A move across filesystems arrives as an
-unpaired delete + create and is not a rename at all — inotify gives no cookie.
+Scope: a source is watched **whole**, to any depth, plus its parent directory
+non-recursively, so renaming a source directory itself is caught.
+`watched_roots` are watched at their top level, so renaming a repo inside one
+is caught, but moves deeper inside a repo are not. A move across filesystems
+arrives as an unpaired delete + create and is not a rename at all — inotify
+gives no cookie.
 
-A directory created after startup is watched as it appears, but only within
-that same scope: a new `_shared/mcp/` inside a source is picked up, while a
-repo cloned into a `watched_root` is not descended into. The bound is what
-keeps the watch set the size this section describes however long the daemon
-runs, and it is what stops a destination from ever being watched. A watched
-destination would make each apply's own manifest write the trigger for the
-next apply.
+The asymmetry between the two is deliberate, and it is the whole bound on the
+watch set. A source is small and hand-authored, and working notes are filed
+deep inside a key (`<key>/work/wf-now/<branch>/`), so a depth cap there is a
+silent hole: the edit fires no event and the file simply never materialises. A
+`watched_root` is the opposite — large, machine-generated in places, and its
+children are the *destinations*. A watched destination would make each apply's
+own manifest write the trigger for the next apply, so the daemon would never
+return to idle. `node_modules` and `.venv` are skipped outright.
+
+A directory created after startup is watched as it appears, together with
+every subdirectory it already contains. The catch-up matters because
+`mkdir -p a/b/c`, `git clone` and `cp -r` all outrun inotify: the `CREATE` of
+`a` is delivered after `b` and `c` exist, so their own events went to watches
+that did not exist yet. Watching `a` alone would leave the tree permanently
+half-seen.
 
 On a successful apply you'll see output like:
 ```
