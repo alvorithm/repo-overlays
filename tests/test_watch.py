@@ -85,6 +85,17 @@ def test_directory_rename_is_recorded_as_a_pair(tmp: Path, monkeypatch: pytest.M
     assert line[3] == str(tmp / "Overlays" / "defaults")
 
 
+class _Inotify:
+    """Records add_watch calls and hands out increasing watch descriptors."""
+
+    def __init__(self) -> None:
+        self.watched: list[tuple[str, int]] = []
+
+    def add_watch(self, path: str, mask: int) -> int:
+        self.watched.append((path, mask))
+        return len(self.watched) + 1
+
+
 def test_created_directory_gets_a_watch(tmp: Path) -> None:
     """A directory created after startup is watched immediately.
 
@@ -92,31 +103,103 @@ def test_created_directory_gets_a_watch(tmp: Path) -> None:
     new overlay key would otherwise be invisible to inotify until the watcher
     restarted — partial edits inside it would never re-apply.
     """
-    from repo_overlays.watch import _IN_CREATE, _IN_ISDIR, _watch_created_dir
+    from repo_overlays.watch import _IN_CREATE, _IN_ISDIR, _SOURCE_DEPTH, _watch_created_dir
 
     src = tmp / "Overlays" / "defaults"
     src.mkdir(parents=True)
     (src / "_shared").mkdir()  # the event follows the on-disk mkdir
     wd_paths = {1: src}
-
-    class _Inotify:
-        def __init__(self) -> None:
-            self.watched: list[tuple[str, int]] = []
-
-        def add_watch(self, path: str, mask: int) -> int:
-            self.watched.append((path, mask))
-            return len(self.watched) + 1
+    wd_budget = {1: _SOURCE_DEPTH}
 
     ino = _Inotify()
-    _watch_created_dir(_Event(1, _IN_CREATE | _IN_ISDIR, 0, "_shared"), wd_paths, ino)
+    _watch_created_dir(_Event(1, _IN_CREATE | _IN_ISDIR, 0, "_shared"), wd_paths, wd_budget, ino)
     assert wd_paths[2] == src / "_shared"
     assert ino.watched == [(str(src / "_shared"), _WATCH_FLAGS)]
+    assert wd_budget[2] == _SOURCE_DEPTH - 1, "the new watch spends one level"
 
     # File creates and ignored dirs (git dirs, render output) must not add watches.
-    _watch_created_dir(_Event(1, _IN_CREATE, 0, "note.md"), wd_paths, ino)
-    _watch_created_dir(_Event(1, _IN_CREATE | _IN_ISDIR, 0, "_rendered"), wd_paths, ino)
-    _watch_created_dir(_Event(1, _IN_CREATE | _IN_ISDIR, 0, ".git"), wd_paths, ino)
+    _watch_created_dir(_Event(1, _IN_CREATE, 0, "note.md"), wd_paths, wd_budget, ino)
+    _watch_created_dir(_Event(1, _IN_CREATE | _IN_ISDIR, 0, "_rendered"), wd_paths, wd_budget, ino)
+    _watch_created_dir(_Event(1, _IN_CREATE | _IN_ISDIR, 0, ".git"), wd_paths, wd_budget, ino)
     assert len(ino.watched) == 1, ino.watched
+
+
+def test_repo_created_under_a_watched_root_is_not_descended_into(tmp: Path) -> None:
+    """A watched_root stays top-level, however its children come into being.
+
+    Regression: `_watch_created_dir` used to watch every directory created
+    under any watch, unbounded. One clone under a watched root then dragged
+    the whole checkout in (`node_modules` and all), and once a *destination*
+    was watched, apply's own manifest write scheduled the next apply. The
+    watch set grew 166 → 1141 and the daemon burned a core indefinitely.
+    """
+    from repo_overlays.watch import (
+        _IN_CREATE,
+        _IN_ISDIR,
+        _TOP_LEVEL_ONLY,
+        _watch_created_dir,
+    )
+
+    code = tmp / "Code"
+    (code / "newrepo").mkdir(parents=True)
+    wd_paths = {1: code}
+    wd_budget = {1: _TOP_LEVEL_ONLY}
+
+    ino = _Inotify()
+    _watch_created_dir(_Event(1, _IN_CREATE | _IN_ISDIR, 0, "newrepo"), wd_paths, wd_budget, ino)
+
+    assert ino.watched == [], "a repo under a watched_root must not be watched"
+    assert 2 not in wd_paths
+
+
+def test_descent_budget_runs_out_at_the_walk_depth(tmp: Path) -> None:
+    """Growth below a source stops where the initial walk stops.
+
+    Otherwise the set has no ceiling: every new subdirectory grants the right
+    to watch its own subdirectories, for as long as the daemon runs.
+    """
+    from repo_overlays.watch import _IN_CREATE, _IN_ISDIR, _SOURCE_DEPTH, _watch_created_dir
+
+    src = tmp / "Overlays" / "defaults"
+    deep = src / "a" / "b" / "c" / "d"
+    deep.mkdir(parents=True)
+
+    ino = _Inotify()
+    wd_paths, wd_budget = {1: src}, {1: _SOURCE_DEPTH}
+    wd, here = 1, src
+    for name in ("a", "b", "c", "d"):
+        _watch_created_dir(_Event(wd, _IN_CREATE | _IN_ISDIR, 0, name), wd_paths, wd_budget, ino)
+        here = here / name
+        if here not in wd_paths.values():
+            break
+        wd = next(k for k, v in wd_paths.items() if v == here)
+
+    assert [p for p, _m in ino.watched] == [
+        str(src / "a"),
+        str(src / "a" / "b"),
+        str(src / "a" / "b" / "c"),
+    ], "three levels below the source, then nothing"
+
+
+def test_own_manifest_write_is_not_an_event(tmp: Path) -> None:
+    """The artifacts apply writes must never trigger the apply that writes them.
+
+    A destination that ends up watched (a fixed target inside a source's
+    parent, say) would otherwise loop: write manifest → event → apply → write
+    manifest. Belt to `apply_all`'s braces, which is not to write at all when
+    there is nothing to do.
+    """
+    from repo_overlays.manifest import MANIFEST_FILENAME
+    from repo_overlays.watch import _should_ignore
+
+    assert _should_ignore(MANIFEST_FILENAME)
+    assert _should_ignore(str(tmp / "Code" / "proj" / MANIFEST_FILENAME))
+    assert _should_ignore("CLAUDE.md.proposed")
+    assert _should_ignore(".divergent")
+    # A skip marker is a real instruction: creating one must still re-apply,
+    # so that the destination's links are withdrawn.
+    assert not _should_ignore(".repo-overlays-skip")
+    assert not _should_ignore("AGENTS.md")
 
 
 def test_file_moves_and_unpaired_moves_are_not_recorded(tmp: Path, monkeypatch: pytest.MonkeyPatch) -> None:
