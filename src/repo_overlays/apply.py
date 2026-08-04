@@ -467,7 +467,13 @@ def _already_applied(dest_root: Path, key: str, is_fixed: bool, stack: SourceSta
     # template edit, not this cheap presence check's — so treat it as placed,
     # else a destination with standing drift would re-apply on every cd.
     accounted = {lr.path for lr in recorded} | set(manifest.drift)
-    if planned != accounted:
+    # A planned path the destination holds as a regular file produces no link
+    # either: `_apply_key` refuses to overwrite one, so a fresh apply really
+    # would be a no-op there. Counting it as missing instead leaves such a
+    # destination permanently "not applied", and every sweep then rewrites a
+    # manifest nothing asked it to change.
+    blocked = {p for p in planned - accounted if _blocks_a_link(dest_root / p)}
+    if planned != accounted | blocked:
         return False  # a source file was added or removed since the last apply
 
     for lr in recorded:
@@ -485,6 +491,15 @@ def _already_applied(dest_root: Path, key: str, is_fixed: bool, stack: SourceSta
     return _exclude_up_to_date(
         dest_root, [lr.path for lr in recorded], _owned_dirs(key, is_fixed, stack)
     )
+
+
+def _blocks_a_link(path: Path) -> bool:
+    """Return True if *path* is real content that apply will not replace.
+
+    Mirrors the guard in `_apply_key`: anything present that is not a symlink
+    stays, so upstream's own ``AGENTS.md`` is never overwritten.
+    """
+    return path.exists() and not path.is_symlink()
 
 
 def _exclude_up_to_date(dest_root: Path, link_paths: list[str], owned_dirs: list[str]) -> bool:
@@ -590,10 +605,20 @@ def _apply_and_record(
 
 
 def apply_all(config: AppConfig) -> None:
-    """Apply every known destination."""
+    """Apply every known destination, skipping the ones already materialised.
+
+    The skip is not just about output noise. `_apply_and_record` rewrites a
+    manifest and an ``info/exclude`` block per destination, and the watcher
+    watches directories that hold them, so an unconditional sweep makes each
+    apply the trigger for the next one and the daemon never returns to idle.
+    An opted-out destination still goes through, because withdrawing its links
+    is work that the presence check would read as "nothing to do".
+    """
     for key, dest_root, is_fixed in iter_all_destinations(config):
         stack = SourceStack(config)
         sources = _contributing_sources(key, config)
         if not sources:
+            continue
+        if not _is_opted_out(dest_root) and _already_applied(dest_root, key, is_fixed, stack):
             continue
         _apply_and_record(key, dest_root, is_fixed, stack, config, sources)

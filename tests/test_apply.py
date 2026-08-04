@@ -1322,3 +1322,92 @@ def test_status_reports_no_destinations_instead_of_clean(tmp: Path, capsys) -> N
     assert rc == 1
     assert out.startswith("no-destinations:")
     assert "All overlays clean." not in out
+
+
+def test_apply_all_writes_nothing_when_every_destination_is_current(
+    tmp: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """A second sweep over an unchanged tree is a genuine no-op.
+
+    Regression: `apply_all` re-applied every destination unconditionally, so
+    each sweep rewrote every manifest and every ``info/exclude`` block. The
+    watcher watches directories that hold those files, so the write scheduled
+    the next sweep: 4714 sweeps an hour, a core burned, and 116k journal lines.
+    """
+    watched = tmp / "Code"
+    project = watched / "myproject"
+    _git_init(project)
+
+    src_dir = make_source(tmp, "personal", watched_roots=[str(watched)])
+    (src_dir / "myproject").mkdir()
+    (src_dir / "myproject" / "AGENTS.md").write_text("project guidance")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, watched_roots=[watched]))
+    apply_all(config)
+    capsys.readouterr()
+
+    manifest = project / MANIFEST_FILENAME
+    before = (manifest.stat().st_mtime_ns, manifest.read_bytes())
+    apply_all(config)
+
+    assert (manifest.stat().st_mtime_ns, manifest.read_bytes()) == before, (
+        "the manifest was rewritten with nothing to change"
+    )
+    assert capsys.readouterr().out == "", "a clean sweep must say nothing"
+
+
+def test_apply_all_still_applies_after_a_source_edit(tmp: Path) -> None:
+    """The skip is a fast path, not a lid: a real edit still reaches the target."""
+    watched = tmp / "Code"
+    project = watched / "myproject"
+    _git_init(project)
+
+    src_dir = make_source(tmp, "personal", watched_roots=[str(watched)])
+    (src_dir / "myproject").mkdir()
+    (src_dir / "myproject" / "CLAUDE.md.mo").write_text("first\n")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, watched_roots=[watched]))
+    apply_all(config)
+    assert (project / "CLAUDE.md").read_text() == "first\n"
+
+    (src_dir / "myproject" / "CLAUDE.md.mo").write_text("second\n")
+    (src_dir / "myproject" / "AGENTS.md").write_text("added\n")
+    apply_all(config)
+
+    assert (project / "CLAUDE.md").read_text() == "second\n"
+    assert (project / "AGENTS.md").is_symlink()
+
+
+def test_destination_holding_a_real_file_reaches_the_fast_path(tmp: Path) -> None:
+    """A path apply refuses to overwrite must not mean "never applied".
+
+    `_apply_key` skips a regular file at a destination path, so it records no
+    link for it. Counting that as a missing link left the destination forever
+    un-applied, and every sweep rewrote its manifest. Penpot shipping its own
+    AGENTS.md was enough to trigger it.
+    """
+    from repo_overlays.apply import _already_applied
+    from repo_overlays.sources import SourceStack
+
+    watched = tmp / "Code"
+    project = watched / "myproject"
+    _git_init(project)
+    (project / "AGENTS.md").write_text("upstream's own file\n")
+
+    src_dir = make_source(tmp, "personal", watched_roots=[str(watched)])
+    (src_dir / "myproject").mkdir()
+    (src_dir / "myproject" / "AGENTS.md").write_text("overlay guidance\n")
+    (src_dir / "myproject" / "CLAUDE.md").write_text("overlay guidance\n")
+
+    config = _config(SourceConfig(name="personal", path=src_dir, watched_roots=[watched]))
+    apply_all(config)
+
+    assert (project / "AGENTS.md").read_text() == "upstream's own file\n"
+    assert (project / "CLAUDE.md").is_symlink()
+    assert _already_applied(project, "myproject", False, SourceStack(config)) is True
+
+    # Remove the blocker and the overlay must take the path over.
+    (project / "AGENTS.md").unlink()
+    assert _already_applied(project, "myproject", False, SourceStack(config)) is False
+    apply_all(config)
+    assert (project / "AGENTS.md").is_symlink()
