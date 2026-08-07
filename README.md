@@ -118,6 +118,39 @@ per-tool: omp has a `worktree.base` setting (`OMP_WORKTREE_DIR` overrides);
 Claude Code has no base-directory setting and needs a `WorktreeCreate` hook,
 which replaces its git logic and returns the directory to use.
 
+## Keeping overlays out of git
+
+`apply` writes every symlink it installs into the destination's
+`.git/info/exclude`, inside a marked block, and never into the project's own
+`.gitignore`. The block is replaced on each apply, so entries never accumulate.
+Linked worktrees share one `info/exclude`, because git resolves `info/` to the
+common dir, so each destination writes its own block labelled with its root.
+Several blocks in one file is therefore correct, not duplication.
+
+**Mark any key directory that owns a tree with `.overlay-own`.** The marker
+collapses that tree to a single directory entry, `/work/` instead of one line
+per file, and the difference is not only tidiness. A `.gitignore` in the working
+tree outranks `$GIT_DIR/info/exclude`, so a project whose `.gitignore` carries an
+unanchored negation re-includes every overlay file with that basename and the
+per-file entry loses. Penpot's `!README.md` and `!AGENTS.md` did exactly that to
+`.omp/AGENTS.md` and to six `README.md` files under `work/`. A directory entry is
+immune, because git never descends into an excluded directory and a negation
+cannot re-include a file underneath one. Adding the two markers took that
+destination's block from about 200 lines to 27.
+
+Diagnose any file that still appears in `git status` with:
+
+```sh
+git check-ignore -v <path>     # names the winning pattern, its file and its line
+```
+
+Two limits are worth knowing. `info/exclude` suppresses untracked paths only, so
+a symlink that one `git add -A` caught stays tracked until you untrack it by
+hand, and `repo-overlay status` reports it. A directory entry also hides real
+files that no source provides, so drift inside an owned tree stops showing in
+`git status`. Details and the rest of the exclusion story are in
+[USAGE.md §9.2](docs/USAGE.md).
+
 ## Installation
 
 **Prerequisites** — Python ≥ 3.11 and [uv](https://docs.astral.sh/uv/).
