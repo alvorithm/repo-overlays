@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from repo_overlays.apply import apply_all, apply_one
+from repo_overlays.apply import apply_all, apply_one, unmanaged_owned_paths
 from repo_overlays.config import AppConfig, SourceConfig
 from repo_overlays.manifest import MANIFEST_FILENAME, read as read_manifest
 from tests.conftest import make_source, make_top_config
@@ -865,6 +865,36 @@ def test_own_marker_hides_files_that_are_not_overlay_managed(tmp: Path) -> None:
         check=True, capture_output=True, text=True,
     ).stdout
     assert "work/" not in out, out
+
+
+def test_unmanaged_owned_paths_reports_what_git_can_no_longer_see(tmp: Path) -> None:
+    """The counterpart to the test above: git looks away, so `status` must look.
+
+    Three shapes leak into an owned tree and all three are lost to `git clean`
+    without a word: a real file, a hand-made symlink, and a real file in a
+    subdirectory. Overlay-provided links and editor junk are not findings.
+    """
+    project, _overlay, config = _own_overlay(tmp)
+    apply_one(project, config)
+
+    work = project / "work"
+    (work / "wf-now" / "scratch.md").write_text("agent scratch\n")
+    (work / "stray").mkdir()
+    (work / "stray" / "note.md").write_text("deeper\n")
+    (work / "wf-now" / "alias.md").symlink_to(work / "wf-now" / "plan.md")
+    (work / "wf-now" / "plan.md~").write_text("editor backup\n")
+
+    from repo_overlays.sources import SourceStack
+
+    stack = SourceStack(config)
+    links = [lr.path for lr in read_manifest(project).links]
+    found = unmanaged_owned_paths("myproject", project, False, stack, links)
+
+    assert found == [
+        "work/stray/note.md",
+        "work/wf-now/alias.md",
+        "work/wf-now/scratch.md",
+    ]
 
 
 def test_own_marker_declines_to_collapse_a_tracked_directory(tmp: Path) -> None:

@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from .apply import apply_all, apply_one, tracked_links
+from .apply import apply_all, apply_one, tracked_links, unmanaged_owned_paths
 from .config import TOP_LEVEL_CONFIG, AppConfig, load_config
 from .manifest import divergent_markers, read as read_manifest
 from .promote import promote
@@ -145,11 +145,12 @@ def _render_is_stale(lr, stack: SourceStack) -> bool:
 
 
 def cmd_status(args: argparse.Namespace) -> int:
-    """Report broken links, drift and missing partials.
+    """Report broken links, drift, unmanaged files in owned trees, and missing partials.
 
     With a *path*, only that destination is checked and template partials are
-    skipped — cheap enough (a manifest read plus one stat per link) to run from
-    a directory-enter hook.
+    skipped. What remains is a manifest read, one stat per link, and a walk of
+    each own-marked tree, which is cheap enough to run from a directory-enter
+    hook.
     """
     config = _load(args)
     path = getattr(args, "path", None)
@@ -193,6 +194,15 @@ def cmd_status(args: argparse.Namespace) -> int:
         # untracked paths, so it stays tracked until untracked by hand.
         for rel in tracked_links(dest_root, [lr.path for lr in manifest.links]):
             print(f"tracked: {dest_root / rel} -> git -C {dest_root} rm --cached {rel}")
+            issues += 1
+
+        # An owned tree is excluded from git as one directory, so a file no
+        # source provides is invisible to git and absent from the manifest.
+        # Nothing else would ever report it.
+        for rel in unmanaged_owned_paths(
+            key, dest_root, is_fixed, stack, [lr.path for lr in manifest.links]
+        ):
+            print(f"unmanaged: {dest_root / rel} -> move it into the source or delete it")
             issues += 1
 
         for marker in divergent_markers(dest_root):

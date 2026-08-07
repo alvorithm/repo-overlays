@@ -20,7 +20,7 @@ from .manifest import (
 )
 from .render import render_hash, render_template
 from .resolve import iter_all_destinations, resolve_key_dest
-from .sources import SourceStack
+from .sources import SourceStack, is_tool_junk
 
 
 _HOME = Path.home()
@@ -309,6 +309,45 @@ def _owned_dirs(key: str, is_fixed: bool, stack: SourceStack) -> list[str]:
         if parts[0] == ".git":
             continue
         out.append(dest_rel.as_posix())
+    return sorted(out)
+
+
+def unmanaged_owned_paths(
+    key: str,
+    dest_root: Path,
+    is_fixed: bool,
+    stack: SourceStack,
+    link_paths: Iterable[str],
+) -> list[str]:
+    """Return paths inside an own-marked tree that no source provides.
+
+    The coarse ``/work/`` entry is what makes the exclusion robust, and the
+    same entry hides everything else written there.  A file an agent drops
+    straight into an owned tree is therefore invisible twice over: git never
+    mentions it and the manifest never recorded it, so ``git clean`` takes it
+    and nobody notices it went.  Reporting it here is the only thing left that
+    can see it.
+
+    Symlinks to directories are reported rather than descended, since an
+    unmanaged one is itself the finding.
+    """
+    owned = _owned_dirs(key, is_fixed, stack)
+    if not owned:
+        return []
+    managed = {p for p in link_paths if not os.path.isabs(p)}
+    out: list[str] = []
+    for owned_dir in owned:
+        root = dest_root / owned_dir
+        if not root.is_dir():
+            continue
+        for parent, dirnames, filenames in os.walk(root):
+            linked = [n for n in dirnames if os.path.islink(os.path.join(parent, n))]
+            dirnames[:] = [n for n in dirnames if n != ".git" and n not in linked]
+            for name in filenames + linked:
+                rel = os.path.relpath(os.path.join(parent, name), dest_root)
+                if rel in managed or is_tool_junk(Path(rel)):
+                    continue
+                out.append(rel)
     return sorted(out)
 
 
