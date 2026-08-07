@@ -156,14 +156,14 @@ def test_a_source_is_watched_to_any_depth(tmp: Path) -> None:
     """A note filed deep inside a key still reaches the watcher.
 
     Regression: the walk stopped at depth 3, which cuts through the house
-    layout for working notes (`<key>/work/wf-now/<branch>/`, depth 4). Files
+    layout for working notes (`<key>/wip.local/done/<yyyy-mm>-<set>/demo/`, depth 4). Files
     there fire events at their own directory, so a cap there is a silent hole:
     the edit never re-applies, and nothing reports the omission.
     """
     from repo_overlays.watch import _IN_CREATE, _IN_ISDIR, _UNBOUNDED, _watch_created_dir
 
     src = tmp / "Overlays" / "beadpot-docs"
-    branch_dir = src / "beadpot" / "work" / "wf-now" / "feature-x" / "detail"
+    branch_dir = src / "beadpot" / "wip.local" / "done" / "2026-08-feature-x" / "detail"
     branch_dir.mkdir(parents=True)
 
     ino = _Inotify()
@@ -178,9 +178,9 @@ def test_a_source_is_watched_to_any_depth(tmp: Path) -> None:
     watched = {p for p, _m in ino.watched}
     assert watched == {
         str(src / "beadpot"),
-        str(src / "beadpot" / "work"),
-        str(src / "beadpot" / "work" / "wf-now"),
-        str(src / "beadpot" / "work" / "wf-now" / "feature-x"),
+        str(src / "beadpot" / "wip.local"),
+        str(src / "beadpot" / "wip.local" / "done"),
+        str(src / "beadpot" / "wip.local" / "done" / "2026-08-feature-x"),
         str(branch_dir),
     }, "the whole subtree, at any depth"
 
@@ -192,19 +192,19 @@ def test_a_tree_created_in_one_go_is_caught_up(tmp: Path) -> None:
     their own CREATEs went to watches that did not exist yet. Watching `a`
     alone leaves the tree half-seen: a note written into `c` fires nothing,
     never materialises, and nothing reports the omission. Observed live on
-    `mkdir -p <source>/<key>/work/wf-now/<branch>`.
+    `mkdir -p <source>/<key>/wip.local/done/<yyyy-mm>-<set>`.
     """
     from repo_overlays.watch import _IN_CREATE, _IN_ISDIR, _UNBOUNDED, _watch_created_dir
 
     src = tmp / "Overlays" / "defaults"
-    (src / "keydir" / "work" / "wf-now" / "branch-x").mkdir(parents=True)
+    (src / "keydir" / "wip.local" / "done" / "2026-08-branch-x").mkdir(parents=True)
 
     ino = _Inotify()
     wd_paths, wd_budget = {1: src}, {1: _UNBOUNDED}
     # Only the top directory's event ever arrives; the rest were lost.
     _watch_created_dir(_Event(1, _IN_CREATE | _IN_ISDIR, 0, "keydir"), wd_paths, wd_budget, ino)
 
-    assert str(src / "keydir" / "work" / "wf-now" / "branch-x") in {p for p, _m in ino.watched}
+    assert str(src / "keydir" / "wip.local" / "done" / "2026-08-branch-x") in {p for p, _m in ino.watched}
 
 
 def test_initial_walk_covers_a_deep_source_but_not_a_watched_root(tmp: Path) -> None:
@@ -213,7 +213,7 @@ def test_initial_walk_covers_a_deep_source_but_not_a_watched_root(tmp: Path) -> 
     from repo_overlays.watch import _TOP_LEVEL_ONLY, _UNBOUNDED, _collect_watch_paths
 
     src = make_source(tmp, "defaults", watched_roots=[str(tmp / "Code")])
-    deep = src / "beadpot" / "work" / "wf-now" / "feature-x"
+    deep = src / "beadpot" / "wip.local" / "done" / "2026-08-feature-x"
     deep.mkdir(parents=True)
     (tmp / "Code" / "somerepo" / "node_modules" / "pkg").mkdir(parents=True)
 

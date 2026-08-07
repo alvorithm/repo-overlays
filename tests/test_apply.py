@@ -791,22 +791,22 @@ def test_drift_in_subdirectory_is_reported_by_status(tmp: Path) -> None:
     project = tmp / "myproject"
     _git_init(project)
     overlay = src_dir / "myproject"
-    (overlay / "work" / "notes").mkdir(parents=True)
-    (overlay / "work" / "notes" / "guide.md.mo").write_text("v1\n")
+    (overlay / "docs.local" / "findings").mkdir(parents=True)
+    (overlay / "docs.local" / "findings" / "guide.md.mo").write_text("v1\n")
 
     config = _config(SourceConfig(name="personal", path=src_dir, private=True))
     apply_one(project, config)
 
-    live = project / "work" / "notes" / "guide.md"
+    live = project / "docs.local" / "findings" / "guide.md"
     live.unlink()
     live.write_text("the agent's own version\n")
-    (overlay / "work" / "notes" / "guide.md.mo").write_text("v2\n")
+    (overlay / "docs.local" / "findings" / "guide.md.mo").write_text("v2\n")
     apply_one(project, config)
 
-    assert (project / "work" / "notes" / ".divergent").exists()
-    assert read_m(project).drift == ["work/notes/guide.md"]
+    assert (project / "docs.local" / "findings" / ".divergent").exists()
+    assert read_m(project).drift == ["docs.local/findings/guide.md"]
     found = {str(p.relative_to(project)) for p in divergent_markers(project)}
-    assert found == {"work/notes/.divergent"}, found
+    assert found == {"docs.local/findings/.divergent"}, found
 
 
 # ── directory-level excludes (.overlay-own) ────────────────────────────────
@@ -817,54 +817,54 @@ def _exclude_of(project: Path) -> str:
 
 
 def _own_overlay(tmp: Path) -> tuple[Path, Path, AppConfig]:
-    """Source with `myproject/work/` marked overlay-owned, plus a root file."""
+    """Source with `myproject/wip.local/` marked overlay-owned, plus a root file."""
     src_dir = make_source(tmp, "personal")
     project = tmp / "myproject"
     _git_init(project)
     overlay = src_dir / "myproject"
-    (overlay / "work" / "wf-now").mkdir(parents=True)
-    (overlay / "work" / ".overlay-own").write_text("")
-    (overlay / "work" / "wf-now" / "plan.md").write_text("plan\n")
-    (overlay / "work" / "wf-now" / "notes.md").write_text("notes\n")
+    (overlay / "wip.local" / "feature-x").mkdir(parents=True)
+    (overlay / "wip.local" / ".overlay-own").write_text("")
+    (overlay / "wip.local" / "feature-x" / "plan.md").write_text("plan\n")
+    (overlay / "wip.local" / "feature-x" / "notes.md").write_text("notes\n")
     (overlay / "AGENTS.md").write_text("guidance\n")
     config = _config(SourceConfig(name="personal", path=src_dir, private=True))
     return project, overlay, config
 
 
 def test_own_marker_excludes_the_directory_not_its_files(tmp: Path) -> None:
-    """One `/work/` entry replaces the per-file lines; files outside stay per-file."""
+    """One `/wip.local/` entry replaces the per-file lines; files outside stay per-file."""
     project, _overlay, config = _own_overlay(tmp)
     apply_one(project, config)
 
     exclude = _exclude_of(project)
-    assert "/work/\n" in exclude
-    assert "/work/wf-now/plan.md" not in exclude
-    assert "/work/wf-now/notes.md" not in exclude
+    assert "/wip.local/\n" in exclude
+    assert "/wip.local/feature-x/plan.md" not in exclude
+    assert "/wip.local/feature-x/notes.md" not in exclude
     assert "/AGENTS.md" in exclude
 
     # The links themselves are unaffected: only the exclude granularity changed.
-    assert (project / "work" / "wf-now" / "plan.md").is_symlink()
+    assert (project / "wip.local" / "feature-x" / "plan.md").is_symlink()
     assert {lr.path for lr in read_manifest(project).links} == {
-        "AGENTS.md", "work/wf-now/plan.md", "work/wf-now/notes.md",
+        "AGENTS.md", "wip.local/feature-x/plan.md", "wip.local/feature-x/notes.md",
     }
 
 
 def test_own_marker_hides_files_that_are_not_overlay_managed(tmp: Path) -> None:
     """The point of the coarse entry: git never sees anything under an owned dir.
 
-    A file an agent writes directly into `work/` (no overlay source, so no
+    A file an agent writes directly into `wip.local/` (no overlay source, so no
     exclude line of its own) must not show as untracked — that visibility is
     what got overlay symlinks staged into a project by a stray `git add -A`.
     """
     project, _overlay, config = _own_overlay(tmp)
     apply_one(project, config)
 
-    (project / "work" / "wf-now" / "scratch.md").write_text("agent scratch\n")
+    (project / "wip.local" / "feature-x" / "scratch.md").write_text("agent scratch\n")
     out = subprocess.run(
         ["git", "-C", str(project), "status", "--porcelain", "-uall"],
         check=True, capture_output=True, text=True,
     ).stdout
-    assert "work/" not in out, out
+    assert "wip.local/" not in out, out
 
 
 def test_unmanaged_owned_paths_reports_what_git_can_no_longer_see(tmp: Path) -> None:
@@ -877,12 +877,12 @@ def test_unmanaged_owned_paths_reports_what_git_can_no_longer_see(tmp: Path) -> 
     project, _overlay, config = _own_overlay(tmp)
     apply_one(project, config)
 
-    work = project / "work"
-    (work / "wf-now" / "scratch.md").write_text("agent scratch\n")
+    work = project / "wip.local"
+    (work / "feature-x" / "scratch.md").write_text("agent scratch\n")
     (work / "stray").mkdir()
     (work / "stray" / "note.md").write_text("deeper\n")
-    (work / "wf-now" / "alias.md").symlink_to(work / "wf-now" / "plan.md")
-    (work / "wf-now" / "plan.md~").write_text("editor backup\n")
+    (work / "feature-x" / "alias.md").symlink_to(work / "feature-x" / "plan.md")
+    (work / "feature-x" / "plan.md~").write_text("editor backup\n")
 
     from repo_overlays.sources import SourceStack
 
@@ -891,9 +891,9 @@ def test_unmanaged_owned_paths_reports_what_git_can_no_longer_see(tmp: Path) -> 
     found = unmanaged_owned_paths("myproject", project, False, stack, links)
 
     assert found == [
-        "work/stray/note.md",
-        "work/wf-now/alias.md",
-        "work/wf-now/scratch.md",
+        "wip.local/feature-x/alias.md",
+        "wip.local/feature-x/scratch.md",
+        "wip.local/stray/note.md",
     ]
 
 
@@ -905,16 +905,16 @@ def test_own_marker_declines_to_collapse_a_tracked_directory(tmp: Path) -> None:
     promises; saying so beats silently half-applying it.
     """
     project, _overlay, config = _own_overlay(tmp)
-    (project / "work").mkdir(exist_ok=True)
-    (project / "work" / "real.md").write_text("a file the project tracks\n")
-    subprocess.run(["git", "-C", str(project), "add", "-f", "work/real.md"],
+    (project / "wip.local").mkdir(exist_ok=True)
+    (project / "wip.local" / "real.md").write_text("a file the project tracks\n")
+    subprocess.run(["git", "-C", str(project), "add", "-f", "wip.local/real.md"],
                    check=True, capture_output=True)
 
     apply_one(project, config)
 
     exclude = _exclude_of(project)
-    assert "/work/\n" not in exclude
-    assert "/work/wf-now/plan.md" in exclude
+    assert "/wip.local/\n" not in exclude
+    assert "/wip.local/feature-x/plan.md" in exclude
     assert "/AGENTS.md" in exclude
 
 
@@ -941,8 +941,8 @@ def test_own_marker_never_materialises(tmp: Path) -> None:
     project, _overlay, config = _own_overlay(tmp)
     apply_one(project, config)
 
-    assert not (project / "work" / ".overlay-own").exists()
-    assert not (project / "work" / ".overlay-own").is_symlink()
+    assert not (project / "wip.local" / ".overlay-own").exists()
+    assert not (project / "wip.local" / ".overlay-own").is_symlink()
     assert all(".overlay-own" not in lr.path for lr in read_manifest(project).links)
 
 
@@ -975,16 +975,16 @@ def test_marker_added_later_rewrites_a_stale_exclude_block(tmp: Path) -> None:
     stayed per-file until something else forced a re-apply.
     """
     project, overlay, config = _own_overlay(tmp)
-    (overlay / "work" / ".overlay-own").unlink()
+    (overlay / "wip.local" / ".overlay-own").unlink()
     apply_one(project, config)
-    assert "/work/wf-now/plan.md" in _exclude_of(project)
+    assert "/wip.local/feature-x/plan.md" in _exclude_of(project)
 
-    (overlay / "work" / ".overlay-own").write_text("")
+    (overlay / "wip.local" / ".overlay-own").write_text("")
     apply_one(project, config)
 
     exclude = _exclude_of(project)
-    assert "/work/\n" in exclude
-    assert "/work/wf-now/plan.md" not in exclude
+    assert "/wip.local/\n" in exclude
+    assert "/wip.local/feature-x/plan.md" not in exclude
 
 
 # ── _already_applied: source changes since last apply ──────────────────────
@@ -1070,19 +1070,19 @@ def test_already_applied_ignores_standing_drift(tmp: Path) -> None:
     project = tmp / "myproject"
     _git_init(project)
     overlay = src_dir / "myproject"
-    (overlay / "work").mkdir(parents=True)
-    (overlay / "work" / "guide.md.mo").write_text("v1\n")
+    (overlay / "docs.local").mkdir(parents=True)
+    (overlay / "docs.local" / "guide.md.mo").write_text("v1\n")
 
     config = _config(SourceConfig(name="personal", path=src_dir, private=True))
     apply_one(project, config)
 
     # Diverge the live file and bump the template, then apply to record drift.
-    live = project / "work" / "guide.md"
+    live = project / "docs.local" / "guide.md"
     live.unlink()
     live.write_text("the agent's own version\n")
-    (overlay / "work" / "guide.md.mo").write_text("v2\n")
+    (overlay / "docs.local" / "guide.md.mo").write_text("v2\n")
     apply_one(project, config)
-    assert read_manifest(project).drift == ["work/guide.md"]
+    assert read_manifest(project).drift == ["docs.local/guide.md"]
 
     # With drift standing and no source change, the fast path holds.
     assert _already_applied(project, "myproject", False, SourceStack(config)) is True

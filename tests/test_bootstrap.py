@@ -360,23 +360,23 @@ def test_fixed_target_keeps_its_underscore_key(tmp: Path) -> None:
 def test_template_seeds_the_overlay_own_marker(tmp: Path) -> None:
     """`.overlay-own` is content for a source-to-source copy, junk only for apply."""
     src = make_source(tmp, "personal")
-    _template(src, "work/.overlay-own", "")
-    _template(src, "work/wf-now/note.md", "note for {{key}}\n")
+    _template(src, "docs.local/.overlay-own", "")
+    _template(src, "docs.local/reference/note.md", "note for {{key}}\n")
 
     project = tmp / "myproject"
     _git_init(project)
     config = _config(SourceConfig(name="personal", path=src, private=True))
 
     assert bootstrap(project, config, write=True) == 0
-    assert (src / "myproject" / "work" / ".overlay-own").is_file()
+    assert (src / "myproject" / "docs.local" / ".overlay-own").is_file()
 
     # The marker did its job at the destination: files materialise, it does not,
     # and git excludes the directory instead of each file under it.
-    assert (project / "work" / "wf-now" / "note.md").is_symlink()
-    assert not (project / "work" / ".overlay-own").exists()
+    assert (project / "docs.local" / "reference" / "note.md").is_symlink()
+    assert not (project / "docs.local" / ".overlay-own").exists()
     exclude = (project / ".git" / "info" / "exclude").read_text()
-    assert "/work/\n" in exclude
-    assert "/work/wf-now/note.md" not in exclude
+    assert "/docs.local/\n" in exclude
+    assert "/docs.local/reference/note.md" not in exclude
 
 
 def test_template_seeds_a_data_toml_so_the_new_key_is_data_active(tmp: Path) -> None:

@@ -43,9 +43,9 @@ _EXCLUDE_SUFFIXES = (".swp", "~", ".proposed")
 #
 # A source tree is watched whole. It is small (238 directories across the six
 # sources on this machine), every directory in it is hand-authored, and filing
-# a note four levels inside a key (`<key>/work/wf-now/<branch>/`) is ordinary
-# use. A cap here is a silent hole: the edit fires no event, so the file never
-# materialises until something else runs an apply.
+# a note four levels inside a key (`<key>/wip.local/done/<yyyy-mm>-<set>/demo/`)
+# is ordinary use. A cap here is a silent hole: the edit fires no event, so the
+# file never materialises until something else runs an apply.
 #
 # A watched_root gets nothing below its top level. That is where the size is,
 # and where the destinations are: a watched destination makes apply's own

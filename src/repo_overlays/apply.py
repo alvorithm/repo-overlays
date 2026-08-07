@@ -321,7 +321,7 @@ def unmanaged_owned_paths(
 ) -> list[str]:
     """Return paths inside an own-marked tree that no source provides.
 
-    The coarse ``/work/`` entry is what makes the exclusion robust, and the
+    The coarse ``/docs.local/`` entry is what makes the exclusion robust, and the
     same entry hides everything else written there.  A file an agent drops
     straight into an owned tree is therefore invisible twice over: git never
     mentions it and the manifest never recorded it, so ``git clean`` takes it

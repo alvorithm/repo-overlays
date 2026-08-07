@@ -117,7 +117,7 @@ class SourceStack:
         """Return key-relative directories declared wholly overlay-owned.
 
         A directory carrying an ``.overlay-own`` marker is excluded at the
-        destination as a directory (``/work/``) rather than file by file.  The
+        destination as a directory (``/docs.local/``) rather than file by file.  The
         per-file form leaks: a file materialised (or written by an agent)
         before its exclude line exists is briefly visible to git, and one
         ``git add -A`` in that window tracks it forever — ``info/exclude``

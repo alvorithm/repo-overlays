@@ -81,7 +81,7 @@ Project destinations are discovered under each source's `watched_roots`, and eve
 | **`data.toml`** | A `<key>/data.toml` makes the key *data-active*: its `.mo` templates get Mustache variables and sections rendered over the parsed TOML, after partials resolve. A key without one keeps the partial-only contract byte-identical. |
 | **materialise** | The act of writing `_rendered/` output and placing a symlink at the destination. |
 | **live file** | The symlink at the destination that the agent reads or writes. |
-| **owned directory** | A source directory carrying an empty `.overlay-own` marker: wholly overlay-owned, so the destination excludes the *directory* (`/work/`) instead of each file under it. Keeps new files in the tree from ever being visible to git — see [USAGE.md §9.2](docs/USAGE.md). |
+| **owned directory** | A source directory carrying an empty `.overlay-own` marker: wholly overlay-owned, so the destination excludes the *directory* (`/docs.local/`) instead of each file under it. Keeps new files in the tree from ever being visible to git — see [USAGE.md §9.2](docs/USAGE.md). |
 | **drift** | A live file whose content no longer matches a fresh render of its template — i.e. an agent has edited it since the last apply. |
 | **reconcile** | The interactive step (`repo-overlay promote`) that resolves drift: diff, accept the new render, keep the agent's edit, or edit the source. |
 | **watched_roots** | Parent directories whose git-repo children are auto-discovered as destinations and re-applied when any source changes. |
@@ -128,15 +128,15 @@ common dir, so each destination writes its own block labelled with its root.
 Several blocks in one file is therefore correct, not duplication.
 
 **Mark any key directory that owns a tree with `.overlay-own`.** The marker
-collapses that tree to a single directory entry, `/work/` instead of one line
-per file, and the difference is not only tidiness. A `.gitignore` in the working
-tree outranks `$GIT_DIR/info/exclude`, so a project whose `.gitignore` carries an
-unanchored negation re-includes every overlay file with that basename and the
-per-file entry loses. Penpot's `!README.md` and `!AGENTS.md` did exactly that to
-`.omp/AGENTS.md` and to six `README.md` files under `work/`. A directory entry is
-immune, because git never descends into an excluded directory and a negation
-cannot re-include a file underneath one. Adding the two markers took that
-destination's block from about 200 lines to 27.
+collapses that tree to a single directory entry, `/docs.local/` instead of one
+line per file, and the difference is not only tidiness. A `.gitignore` in the
+working tree outranks `$GIT_DIR/info/exclude`, so a project whose `.gitignore`
+carries an unanchored negation re-includes every overlay file with that basename
+and the per-file entry loses. Penpot's `!README.md` and `!AGENTS.md` did exactly
+that to `.omp/AGENTS.md` and to six `README.md` files under the docs tree. A
+directory entry is immune, because git never descends into an excluded directory
+and a negation cannot re-include a file underneath one. Adding the two markers
+took that destination's block from about 200 lines to 27.
 
 Diagnose any file that still appears in `git status` with:
 

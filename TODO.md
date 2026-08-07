@@ -3,7 +3,7 @@
 ## Follow-ups from the `init` bootstrap feature
 
 `repo-overlay init` and `status --unmanaged` are implemented (design draft:
-`work/wf-now/init-bootstrap/DESIGN.md`, overlay-managed via `defaults`). The
+`wip.local/feat-init-bootstrap/DESIGN.md`, overlay-managed via `defaults`). The
 engine is in place; what remains is content and adjacent cleanups the design
 (§4, §7) deliberately left out of the code change:
 
@@ -23,5 +23,5 @@ engine is in place; what remains is content and adjacent cleanups the design
 - **Backfill the missing `dot_hindsight/config.json`** for `beadpot`/`penpot`
   once `memory-bus` ships its template — the first real use of the idempotent
   backfill. Check `project:beadpot-userlibs` against the bank first.
-- **`.overlay-own` for `penpot/work/`**, matching `beadpot` (still per-file
+- **`.overlay-own` for `penpot/docs.local/` and `penpot/wip.local/`**, matching `beadpot` (still per-file
   excludes today).

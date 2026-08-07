@@ -386,7 +386,7 @@ Two things happen once and matter later, so both are appended to
 `$XDG_STATE_HOME/repo-overlays/events.log` (tab-separated, append-only):
 
 ```
-2026-07-21T14:18:28+02:00	drift	/home/alvar/Code/beadpot/work/notes/guide.md
+2026-07-21T14:18:28+02:00	drift	/home/alvar/Code/beadpot/docs.local/findings/guide.md
 2026-07-21T18:08:23+02:00	rename	/home/alvar/Overlays/ai-overlay	/home/alvar/Overlays/defaults
 ```
 
@@ -414,7 +414,7 @@ gives no cookie.
 
 The asymmetry between the two is deliberate, and it is the whole bound on the
 watch set. A source is small and hand-authored, and working notes are filed
-deep inside a key (`<key>/work/wf-now/<branch>/`), so a depth cap there is a
+deep inside a key (`<key>/wip.local/done/<yyyy-mm>-<set>/demo/`), so a depth cap there is a
 silent hole: the edit fires no event and the file simply never materialises. A
 `watched_root` is the opposite — large, machine-generated in places, and its
 children are the *destinations*. A watched destination would make each apply's
@@ -614,7 +614,7 @@ sections. The basename fallback picks it up.
 
 A worktree needs no key of its own: the bare-remote-repo-name candidate resolves
 it to its repo's key, so it materialises the same overlay as the main checkout.
-Per-feature folders inside that shared key (e.g. `work/wf-now/<branch>/`) cover
+Per-feature folders inside that shared key (e.g. `wip.local/<branch>/`) cover
 branch-specific docs without per-worktree overlays, which is the normal
 arrangement. Only a checkout whose *repo* has no key anywhere gets nothing; that
 is what `repo-overlay init` (§5) is for.
@@ -769,13 +769,13 @@ Drop an empty `.overlay-own` file in a source directory to declare that tree
 wholly overlay-owned:
 
 ```
-~/Overlays/beadpot-docs/beadpot/work/.overlay-own
+~/Overlays/beadpot-docs/beadpot/docs.local/.overlay-own
 ```
 
 The destination then gets one directory entry instead of one line per file:
 
 ```
-/work/                     ← replaces 44 per-file entries
+/docs.local/                     ← replaces 44 per-file entries
 /AGENTS.md
 /src/beadpot/graph/AGENTS.md
 ```
@@ -803,7 +803,7 @@ which gets a single `/dir/` entry instead of one entry per file.
 `repo-overlay status` reports the trap directly, per destination:
 
 ```
-tracked: ~/Code/beadpot/work/…/REPORT.md -> git -C ~/Code/beadpot rm --cached work/…/REPORT.md
+tracked: ~/Code/beadpot/docs.local/…/REPORT.md -> git -C ~/Code/beadpot rm --cached docs.local/…/REPORT.md
 ```
 
 Nothing else surfaces this: a staged overlay symlink looks like any other
