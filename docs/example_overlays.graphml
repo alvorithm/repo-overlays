@@ -61,7 +61,7 @@
                   <y:Geometry height="80.0" width="100.0" x="-15.0" y="-15.0"/>
                   <y:Fill color="#DFF3E0" transparent="false"/>
                   <y:BorderStyle color="#33AA33" type="line" width="2.0"/>
-                  <y:NodeLabel alignment="left" autoSizePolicy="node_width" backgroundColor="#DFF3E0" borderDistance="0.0" fontFamily="Dialog" fontSize="14" fontStyle="bold" hasLineColor="false" height="20.296875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#004400" verticalTextPosition="bottom" visible="true" width="321.566162109375" x="-110.7830810546875" xml:space="preserve" y="0.0">&#127760; beadpot-docs  (Codeberg, public)</y:NodeLabel>
+                  <y:NodeLabel alignment="left" autoSizePolicy="node_width" backgroundColor="#DFF3E0" borderDistance="0.0" fontFamily="Dialog" fontSize="14" fontStyle="bold" hasLineColor="false" height="20.296875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#004400" verticalTextPosition="bottom" visible="true" width="321.566162109375" x="-110.7830810546875" xml:space="preserve" y="0.0">&#127760; beadpot-docs  (GitHub, private)</y:NodeLabel>
                   <y:Shape type="roundrectangle"/>
                   <y:State closed="true" closedHeight="80.0" closedWidth="100.0" innerGraphDisplayEnabled="true"/>
                   <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
@@ -136,7 +136,7 @@
                   <y:Geometry height="80.0" width="100.0" x="-15.0" y="-15.0"/>
                   <y:Fill color="#DFF3E0" transparent="false"/>
                   <y:BorderStyle color="#33AA33" type="line" width="2.0"/>
-                  <y:NodeLabel alignment="left" autoSizePolicy="node_width" backgroundColor="#DFF3E0" borderDistance="0.0" fontFamily="Dialog" fontSize="14" fontStyle="bold" hasLineColor="false" height="20.296875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#004400" verticalTextPosition="bottom" visible="true" width="312.064208984375" x="-106.0321044921875" xml:space="preserve" y="0.0">&#127760; penpot-docs  (Codeberg, public)</y:NodeLabel>
+                  <y:NodeLabel alignment="left" autoSizePolicy="node_width" backgroundColor="#DFF3E0" borderDistance="0.0" fontFamily="Dialog" fontSize="14" fontStyle="bold" hasLineColor="false" height="20.296875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#004400" verticalTextPosition="bottom" visible="true" width="312.064208984375" x="-106.0321044921875" xml:space="preserve" y="0.0">&#127760; penpot-docs  (GitHub, private)</y:NodeLabel>
                   <y:Shape type="roundrectangle"/>
                   <y:State closed="true" closedHeight="80.0" closedWidth="100.0" innerGraphDisplayEnabled="true"/>
                   <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
