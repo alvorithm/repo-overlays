@@ -109,6 +109,8 @@ def cmd_config(args: argparse.Namespace) -> int:
     for src in config.sources:
         priv = " [private]" if src.private else ""
         print(f"  {src.name}{priv}: {src.path}")
+        if src.registered_path is not None:
+            print(f"    worktree of {src.registered_path}, which config.toml registers")
         for k, v in src.targets.items():
             print(f"    target {k!r} → {v}")
         for r in src.watched_roots:
@@ -208,6 +210,23 @@ def cmd_status(args: argparse.Namespace) -> int:
         for marker in divergent_markers(dest_root):
             print(f"diverged: {marker.parent}")
             issues += 1
+
+        # The manifest names the tree each source rendered from, which stopped
+        # being the registered path the moment a worktree of a source could be
+        # applied. Rendering from a branch is exactly right while it is being
+        # tested and a trap afterwards, so it is reported rather than fixed.
+        for name, applied in sorted(manifest.source_paths.items()):
+            try:
+                src = stack.source_by_name(name)
+            except KeyError:
+                continue  # source gone: its links are already reported broken
+            registered = src.registered_path or src.path
+            if Path(applied) != registered:
+                print(
+                    f"foreign-tree: {dest_root} rendered from {applied}, not {registered}"
+                    f" -> repo-overlay apply from {registered}"
+                )
+                issues += 1
 
     # Unkeyed repos are surfaced only behind --unmanaged: the daily drift digest
     # consumes `status` and treats any line as an issue, so emitting these

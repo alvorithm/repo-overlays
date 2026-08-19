@@ -619,6 +619,43 @@ branch-specific docs without per-worktree overlays, which is the normal
 arrangement. Only a checkout whose *repo* has no key anywhere gets nothing; that
 is what `repo-overlay init` (§5) is for.
 
+### Worktrees of a *source*
+
+The three candidates above resolve a **destination**. A **source** resolves by
+the `path` in `~/.config/repo-overlays/config.toml`, and a worktree of one is a
+different directory, so it used to be no source at all: nothing rendered from
+it, and a session editing there could not see its own work.
+
+A source now follows the tree you stand in. When the working directory is a
+linked worktree whose main checkout is a registered source, that source
+resolves to the worktree for the whole command. Every other source keeps its
+registered path.
+
+```sh
+git worktree add ~/Worktrees/memory-bus-try-it -b try-it
+cd ~/Worktrees/memory-bus-try-it
+repo-overlay config     # memory-bus: ~/Worktrees/memory-bus-try-it
+                        #   worktree of ~/Overlays/memory-bus, which config.toml registers
+repo-overlay apply      # renders the branch, not the main checkout
+```
+
+**A source's fixed targets are absolute paths**, so applying from a worktree
+overwrites what the main checkout rendered: `_claude` still goes to
+`~/.config/claude`. That is exactly right while you are testing a branch and a
+trap once you stop, so the manifest records the tree each link came from and
+`status` reports the mismatch until you apply from the registered source again:
+
+```
+foreign-tree: /home/alvar/.config/claude rendered from /home/alvar/Worktrees/memory-bus-try-it, not /home/alvar/Overlays/memory-bus -> repo-overlay apply from /home/alvar/Overlays/memory-bus
+```
+
+Two limits are worth knowing. The watcher resolves its sources once, at start,
+from its own working directory (`~`, which is no repository), so it never
+follows a worktree and a worktree's edits need an explicit `apply`. And the
+redirect is a property of the working directory rather than of anything stored,
+so the same `apply` run from anywhere else renders the registered tree and moves
+every link back.
+
 ### Excluding one destination
 
 An empty `.repo-overlays-skip` file at a destination's root opts it out. On the
@@ -726,7 +763,9 @@ For every materialised destination, repo-overlays writes a manifest:
 
 It records which links were installed and which source owns them, so
 `apply` can prune stale links cleanly and `status` can detect external
-tampering.
+tampering. A `[source_paths]` table names the directory each of those
+sources was read from, because a source applied from one of its worktrees
+has the same name as the registered one and a different tree behind it.
 
 The manifest is per-machine (it records absolute paths to your overlay
 sources) and must never be committed.  Add it to your **global git

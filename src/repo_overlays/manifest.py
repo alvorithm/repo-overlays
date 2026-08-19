@@ -35,6 +35,12 @@ class Manifest:
     #: A diverged file is *not* a link (apply refuses to overwrite it), so its
     #: location would otherwise be unrecoverable — see divergent_markers().
     drift: list[str] = field(default_factory=list)
+    #: Absolute path of every source that contributed a link, by source name.
+    #: The name alone stopped identifying a tree once a source could be applied
+    #: from one of its worktrees, and a manifest is the only record of which
+    #: tree the live files actually came from. Empty for a manifest written
+    #: before this was recorded.
+    source_paths: dict[str, str] = field(default_factory=dict)
 
     def by_path(self) -> dict[str, LinkRecord]:
         return {lr.path: lr for lr in self.links}
@@ -61,10 +67,19 @@ def read(dest_root: Path) -> Manifest:
         )
         for lr in data.get("link", [])
     ]
-    return Manifest(links=links, drift=list(data.get("drift", [])))
+    return Manifest(
+        links=links,
+        drift=list(data.get("drift", [])),
+        source_paths=dict(data.get("source_paths", {})),
+    )
 
 
-def write(dest_root: Path, links: list[LinkRecord], drift: list[str] | None = None) -> None:
+def write(
+    dest_root: Path,
+    links: list[LinkRecord],
+    drift: list[str] | None = None,
+    source_paths: dict[str, str] | None = None,
+) -> None:
     """Write manifest to dest_root."""
     dest_root.mkdir(parents=True, exist_ok=True)
     data: dict = {
@@ -82,6 +97,10 @@ def write(dest_root: Path, links: list[LinkRecord], drift: list[str] | None = No
             for lr in links
         ],
     }
+    # Omitted rather than written empty, so a manifest from a destination no
+    # source contributes to keeps the shape it had before this was recorded.
+    if source_paths:
+        data["source_paths"] = dict(sorted(source_paths.items()))
     _manifest_path(dest_root).write_bytes(tomli_w.dumps(data).encode())
 
 
@@ -133,5 +152,11 @@ def prune(dest_root: Path, current_paths: set[str]) -> list[str]:
                 link.unlink()
                 _prune_empty_dirs(dest_root, link)
                 pruned.append(lr.path)
-    write(dest_root, kept, manifest.drift)
+    kept_sources = {lr.source for lr in kept}
+    write(
+        dest_root,
+        kept,
+        manifest.drift,
+        {n: p for n, p in manifest.source_paths.items() if n in kept_sources},
+    )
     return pruned

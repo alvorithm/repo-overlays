@@ -483,6 +483,18 @@ def _already_applied(dest_root: Path, key: str, is_fixed: bool, stack: SourceSta
     if not manifest.links and not manifest.drift:
         return False  # no manifest yet (or empty): never applied here
 
+    # Every link here was made from the tree the manifest names. A source
+    # applied from one of its worktrees records that worktree, so a caller
+    # standing anywhere else plans the registered tree instead and every link
+    # has to move. Recorded paths match on the ordinary run, and a manifest
+    # written before they were recorded holds none, so both cost nothing.
+    for name, applied in manifest.source_paths.items():
+        try:
+            if str(stack.source_by_name(name).path) != applied:
+                return False
+        except KeyError:
+            return False  # source dropped from config: its links must be pruned
+
     # Every destination path a fresh apply would place. report_overrides is off:
     # this runs on every cd, and the override warnings are the real apply's job.
     planned: set[str] = set()
@@ -635,7 +647,13 @@ def _apply_and_record(
         pruned = prune(dest_root, current_paths)
         if pruned:
             print(f"  pruned: {pruned}")
-        write(dest_root, links, drift)
+        used = {lr.source for lr in links}
+        write(
+            dest_root,
+            links,
+            drift,
+            {s.name: str(s.path) for s in config.sources if s.name in used},
+        )
         _update_git_exclude(dest_root, list(current_paths), _owned_dirs(key, is_fixed, stack))
     except OSError as e:
         print(f"  error: {_fmt_path(dest_root)}: {type(e).__name__}: {e}", file=sys.stderr)
