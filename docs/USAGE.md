@@ -370,7 +370,7 @@ runs `status`. On this machine a systemd user timer does that daily:
 
 It runs `chezmoi status` and `repo-overlay status`, and sends one
 `notify-send` listing at most 8 paths per section; both clean ⇒ no
-notification. Everything lives in the dotfiles repo (`~/.local/share/chezmoi`,
+notification. Everything lives in the dotfiles repo (`~/Code/chezmoi`,
 README § Config-drift notifier), not here — `repo-overlay status` is the
 stable interface it depends on: **line-per-issue on stdout, exit 1 when any
 issue was found, `All overlays clean.` and exit 0 otherwise.** The digest
@@ -455,7 +455,7 @@ placed.  Useful for feeding into `.chezmoiignore` so that dotfile management doe
 not collide with overlay-managed files:
 
 ```sh
-repo-overlay list >> ~/.local/share/chezmoi/.chezmoiignore
+repo-overlay list >> ~/Code/chezmoi/.chezmoiignore
 ```
 
 ### Re-applying an overlay with visible output
