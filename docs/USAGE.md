@@ -124,11 +124,11 @@ The same failure is general to anything that carries a tree elsewhere without fo
 
 #### When a copy is the wrong choice
 
-- **Files anyone edits at the destination.** An edit through a symlink lands in the source at once and reaches every destination. An edit to a copy stays local: `status` reports it as `edited-copy:`, the next apply keeps it and proposes the source's version beside it, and the edit survives only once someone moves it into the source. Guidance files, skills under development, and working notes in `docs.local/` or `wip.local/` stay symlinks.
+- **Files anyone edits at the destination.** An edit through a symlink lands in the source at once and reaches every destination. An edit to a copy is never overwritten, but it stays in that one destination: `status` reports it as `edited-copy:`, the next apply keeps it and proposes the source's version beside it, and the drift stands until someone either moves the edit into the source or discards it with `repo-overlay promote`. Guidance files, skills under development, and working notes in `docs.local/` or `wip.local/` stay symlinks.
 - **Searching a linked tree.** `grep -r` and `fd` skip symlinked files, so a linked tree looks empty to them. The fix is the search flag (`grep -R`, `fd --follow`, `rg -L`), not copies.
 - **Files a program rewrites.** A settings or state file that a program saves turns every save into an `edited-copy:`. Leave such files unmanaged, as juggler's `credentials.json` is.
 - **Freshness without the watcher.** A symlink to a verbatim source is current the moment the source changes. A copy is current only after an apply, which the watcher, a `cd` hook, or a manual `repo-overlay apply` runs. For a reader that starts often and reads its files once, a mirror run at that reader's launch is fresher than either.
-- **Replacing a repository's own file.** Copy mode never overwrites a regular file it did not write, tracked or not (§8.1).
+- **Replacing a repository's own file.** Copy mode never overwrites a regular file it did not write, tracked or not (§8.1). A copy would not help there anyway: over a tracked file it shows in `git status` as a modification (` M`) where a symlink shows as a typechange (` T`), and either one makes `git pull` refuse with "Your local changes … would be overwritten by merge" as soon as upstream touches the file.
 
 #### What apply does with a copy
 

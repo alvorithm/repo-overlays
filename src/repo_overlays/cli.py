@@ -199,8 +199,9 @@ def cmd_status(args: argparse.Namespace) -> int:
                     issues += 1
                 elif lr.path not in manifest.drift and not copy_intact(link, lr):
                     # Edited since apply wrote it, and no apply has run since.
-                    # The next one keeps the edit and proposes the source's
-                    # version beside it; the edit survives only in a source.
+                    # The next one keeps the edit (never overwrites it) and
+                    # proposes the source's version beside it; the edit reaches
+                    # other destinations only through the source.
                     print(
                         f"edited-copy: {link} -> put the edit in the source, "
                         "or apply then promote to discard it"
