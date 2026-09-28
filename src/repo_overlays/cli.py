@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .apply import apply_all, apply_one, tracked_links, unmanaged_owned_paths
 from .config import TOP_LEVEL_CONFIG, AppConfig, load_config
-from .manifest import divergent_markers, read as read_manifest
+from .manifest import copy_intact, divergent_markers, file_sha256, read as read_manifest
 from .promote import promote
 from .render import lint_data_refs, render_hash, render_text, resolve_template_text
 from .resolve import iter_all_destinations, resolve_key_dest
@@ -146,6 +146,21 @@ def _render_is_stale(lr, stack: SourceStack) -> bool:
         return False  # source .mo gone: a path-level issue, not a stale render
 
 
+def _copy_is_stale(lr, stack: SourceStack) -> bool:
+    """True when the source behind a recorded copy changed and no apply ran.
+
+    A template copy compares render hashes, as a template link does. A
+    verbatim copy compares its recorded `copy_hash` with the source file
+    it was copied from (the record's `target`).
+    """
+    if lr.render_hash is not None:
+        return _render_is_stale(lr, stack)
+    try:
+        return file_sha256(Path(lr.target)) != lr.copy_hash
+    except FileNotFoundError:
+        return False  # source file gone: the next apply prunes the copy
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     """Report broken links, drift, unmanaged files in owned trees, and missing partials.
 
@@ -178,7 +193,23 @@ def cmd_status(args: argparse.Namespace) -> int:
         manifest = read_manifest(dest_root)
         for lr in manifest.links:
             link = dest_root / lr.path
-            if link.is_symlink() and not link.exists():
+            if lr.is_copy:
+                if link.is_symlink() or not link.is_file():
+                    print(f"missing: {link}")
+                    issues += 1
+                elif lr.path not in manifest.drift and not copy_intact(link, lr):
+                    # Edited since apply wrote it, and no apply has run since.
+                    # The next one keeps the edit and proposes the source's
+                    # version beside it; the edit survives only in a source.
+                    print(
+                        f"edited-copy: {link} -> put the edit in the source, "
+                        "or apply then promote to discard it"
+                    )
+                    issues += 1
+                elif not path and _copy_is_stale(lr, stack):
+                    print(f"stale: {link}")
+                    issues += 1
+            elif link.is_symlink() and not link.exists():
                 print(f"broken: {link}")
                 issues += 1
             elif link.exists() and not link.is_symlink():

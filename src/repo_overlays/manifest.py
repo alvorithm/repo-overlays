@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import sys
 import tomllib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -13,6 +15,9 @@ import tomli_w
 MANIFEST_FILENAME = ".repo-overlays.toml"
 #: Marker file that opts a single destination out of overlays entirely.
 SKIP_FILENAME = ".repo-overlays-skip"
+#: Suffix of the temporary file a copy is written to before it is renamed over
+#: its destination (apply._write_copy). Never outlives one apply.
+COPY_TMP_SUFFIX = ".repo-overlays-tmp"
 SCHEMA_VERSION = 1
 
 
@@ -26,6 +31,15 @@ class LinkRecord:
     #: files). Lets _already_applied detect content changes — a partial edit
     #: alters no path, only this hash — without re-rendering on every cd.
     render_hash: str | None = None
+    #: SHA-256 of the bytes written for a copy-mode destination (a regular
+    #: file, see sources.COPY_MARKER); None for a symlink. It is the ownership
+    #: record: a regular file whose content still hashes to it is a copy this
+    #: tool wrote and may refresh or prune, anything else is somebody's edit.
+    copy_hash: str | None = None
+
+    @property
+    def is_copy(self) -> bool:
+        return self.copy_hash is not None
 
 
 @dataclass
@@ -64,6 +78,7 @@ def read(dest_root: Path) -> Manifest:
             key=lr["key"],
             target=lr["target"],
             render_hash=lr.get("render_hash"),
+            copy_hash=lr.get("copy_hash"),
         )
         for lr in data.get("link", [])
     ]
@@ -93,6 +108,7 @@ def write(
                 "key": lr.key,
                 "target": lr.target,
                 **({"render_hash": lr.render_hash} if lr.render_hash is not None else {}),
+                **({"copy_hash": lr.copy_hash} if lr.copy_hash is not None else {}),
             }
             for lr in links
         ],
@@ -102,6 +118,21 @@ def write(
     if source_paths:
         data["source_paths"] = dict(sorted(source_paths.items()))
     _manifest_path(dest_root).write_bytes(tomli_w.dumps(data).encode())
+
+
+def file_sha256(path: Path) -> str:
+    """SHA-256 of *path*'s bytes (the unit copy_hash is recorded in)."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def copy_intact(path: Path, lr: LinkRecord) -> bool:
+    """True if *path* still holds exactly the copy *lr* recorded writing."""
+    return (
+        lr.copy_hash is not None
+        and path.is_file()
+        and not path.is_symlink()
+        and file_sha256(path) == lr.copy_hash
+    )
 
 
 def divergent_markers(dest_root: Path) -> list[Path]:
@@ -139,19 +170,35 @@ def _prune_empty_dirs(dest_root: Path, link: Path) -> None:
 
 
 def prune(dest_root: Path, current_paths: set[str]) -> list[str]:
-    """Remove symlinks no longer in current_paths; return list of pruned rel-paths."""
+    """Remove live files no longer in current_paths; return pruned rel-paths.
+
+    A symlink is always removed. A copy is removed only while it still holds
+    what apply wrote: an edited copy is somebody's work, so it stays in place,
+    unmanaged from here on, with a warning naming it.
+    """
     manifest = read(dest_root)
     pruned: list[str] = []
     kept: list[LinkRecord] = []
     for lr in manifest.links:
         if lr.path in current_paths:
             kept.append(lr)
-        else:
-            link = dest_root / lr.path
-            if link.is_symlink():
-                link.unlink()
-                _prune_empty_dirs(dest_root, link)
+            continue
+        live = dest_root / lr.path
+        if lr.is_copy:
+            if copy_intact(live, lr):
+                live.unlink()
+                _prune_empty_dirs(dest_root, live)
                 pruned.append(lr.path)
+            elif live.exists() and not live.is_symlink():
+                print(
+                    f"  kept: {live} is an edited copy no source provides any more; "
+                    "move the edit into a source or delete the file",
+                    file=sys.stderr,
+                )
+        elif live.is_symlink():
+            live.unlink()
+            _prune_empty_dirs(dest_root, live)
+            pruned.append(lr.path)
     kept_sources = {lr.source for lr in kept}
     write(
         dest_root,

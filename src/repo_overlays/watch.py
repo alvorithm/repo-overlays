@@ -8,7 +8,7 @@ from pathlib import Path
 from .apply import apply_all
 from .config import AppConfig, TOP_LEVEL_CONFIG
 from .events import record
-from .manifest import MANIFEST_FILENAME
+from .manifest import COPY_TMP_SUFFIX, MANIFEST_FILENAME
 
 
 # Events that should trigger a re-apply.
@@ -37,7 +37,7 @@ _EXCLUDE_PARTS = frozenset([".git", "_rendered", "__pycache__", "node_modules", 
 # for the next: the daemon would rewrite the same manifests forever and never
 # return to idle.
 _EXCLUDE_NAMES = frozenset([MANIFEST_FILENAME, ".divergent"])
-_EXCLUDE_SUFFIXES = (".swp", "~", ".proposed")
+_EXCLUDE_SUFFIXES = (".swp", "~", ".proposed", COPY_TMP_SUFFIX)
 
 # How far below a watch a directory created later may still be watched.
 #

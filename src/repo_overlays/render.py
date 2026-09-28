@@ -200,11 +200,7 @@ def render_template(
         )
         if prior_render_hash is not None and live_hash != prior_render_hash:
             # Live file was edited after the last render → diverged.
-            proposed = live_dest.with_suffix(live_dest.suffix + ".proposed")
-            proposed.write_bytes(rendered_bytes)
-            divergent_marker = live_dest.parent / ".divergent"
-            divergent_marker.write_text(live_hash)
-            _notify(live_dest)
+            mark_diverged(live_dest, rendered_bytes, live_hash)
             return "diverged"
 
     # First render or re-render.
@@ -213,6 +209,18 @@ def render_template(
 
     rendered_dest.write_bytes(rendered_bytes)
     return "ok"
+
+
+def mark_diverged(live: Path, proposed: bytes, live_hash: str) -> None:
+    """Keep an edited *live* file and put the fresh content beside it.
+
+    Writes `<live>.proposed` and a `.divergent` marker holding the live
+    hash, then notifies: the three things `repo-overlay promote` and
+    `status` read. Shared by rendered links and by copies.
+    """
+    live.with_suffix(live.suffix + ".proposed").write_bytes(proposed)
+    (live.parent / ".divergent").write_text(live_hash)
+    _notify(live)
 
 
 _PARTIAL_RE = re.compile(r"\{\{>\s*(.+?)\s*\}\}")

@@ -25,6 +25,13 @@ _JUNK_DIRS = frozenset({"__pycache__", ".ruff_cache", ".pytest_cache", ".mypy_ca
 #: declaration, never materialised.
 OWN_MARKER = ".overlay-own"
 
+#: Marker file declaring that every file at or under the directory it sits in
+#: materialises as a *copy* (a regular file) rather than a symlink. For readers
+#: that cannot or will not follow a link: a container that mounts the
+#: destination but not the source, a program that refuses symlinks. It is a
+#: declaration, never materialised.
+COPY_MARKER = ".overlay-copy"
+
 #: Per-key template data file. Its presence makes the key *data-active* (see
 #: ``data_for_key``); it is a declaration, never materialised.
 DATA_FILENAME = "data.toml"
@@ -39,7 +46,7 @@ def is_tool_junk(rel: Path) -> bool:
 
 def _is_junk(rel: Path) -> bool:
     """True for editor leftovers, tool caches and markers, which never materialise."""
-    if rel.name == OWN_MARKER:
+    if rel.name in (OWN_MARKER, COPY_MARKER):
         return True
     # Only the key-root data.toml is the contract; a nested one is an ordinary file.
     if rel.name == DATA_FILENAME and len(rel.parts) == 1:
@@ -136,6 +143,26 @@ class SourceStack:
                 if marker.is_file():
                     owned.add(marker.parent.relative_to(key_dir))
         return owned
+
+    def copy_dirs_for_key(self, key: str) -> set[Path]:
+        """Return key-relative directories whose files materialise as copies.
+
+        Collected across every source that serves *key*, like the own markers:
+        whether a reader can follow a link is a property of where the file
+        lands, not of which source happens to provide it. `Path(".")` means
+        the whole key.
+        """
+        dirs: set[Path] = set()
+        for src in self._config.sources:
+            if key in src.ignore_keys:
+                continue
+            key_dir = src.path / key
+            if not key_dir.is_dir():
+                continue
+            for marker in key_dir.rglob(COPY_MARKER):
+                if marker.is_file():
+                    dirs.add(marker.parent.relative_to(key_dir))
+        return dirs
 
     def resolve_partial(
         self,

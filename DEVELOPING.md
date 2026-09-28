@@ -2,7 +2,7 @@
 
 ## Architecture
 
-The tool is a pipeline: **load config → build source stack → resolve destinations → render templates → place symlinks → write manifest**.
+The tool is a pipeline: **load config → build source stack → resolve destinations → render templates → place symlinks or copies → write manifest**.
 
 Each `apply` run re-derives everything from scratch. There is no persistent process state beyond the per-destination `.repo-overlays.toml` manifest and the `_rendered/` cache inside each source. The watcher daemon is a loop that calls `apply_all` on debounced inotify events.
 
@@ -20,9 +20,10 @@ src/repo_overlays/
 │                 # key (else slug, else basename); iter_all_destinations() for apply_all
 ├── render.py     # render *.mo by recursive {{>ref}} substitution with _PartialLoader;
 │                 # drift detection; writes _rendered/<source>/<key>/<rel>
-├── apply.py      # walk stack for each key, call render or symlink verbatim, dot_rewrite
-│                 # for project overlays; skip silently (_already_applied) when current;
-│                 # catch missing partials and continue; prune manifest on re-apply
+├── apply.py      # walk stack for each key, call render, then place a symlink or (under
+│                 # .overlay-copy) a copy; dot_rewrite for project overlays; skip silently
+│                 # (_already_applied) when current; catch missing partials and continue;
+│                 # prune manifest on re-apply
 ├── manifest.py   # read/write/prune <dest_root>/.repo-overlays.toml (tomllib/tomli_w)
 ├── bootstrap.py  # repo-overlay init: seed <source>/<key>/ from each source's _template/,
 │                 # four init vars, then apply; unmanaged_destinations() → status --unmanaged
@@ -45,9 +46,9 @@ for each (key, dest_root, is_fixed):
               _PartialLoader.get(ref)   # calls resolve_partial() cross-source
               drift check: sha256(live) vs sha256(prior render)
               write _rendered/<src>/<key>/<rel-no-mo>
-              symlink dest → _rendered/…
-    other → symlink dest → source file directly
-  prune(dest_root, current_paths)       # remove symlinks not in this run
+              symlink dest → _rendered/…   (copy mode: copy _rendered/… to dest)
+    other → symlink dest → source file directly   (copy mode: copy it)
+  prune(dest_root, current_paths)       # remove links and unedited copies not in this run
   write(dest_root, links)               # update .repo-overlays.toml
 ```
 
@@ -55,11 +56,11 @@ for each (key, dest_root, is_fixed):
 
 **Partial resolution** — `_PartialLoader` does not delegate partial resolution to a third-party library. `_resolve_partials()` (render.py) applies a compiled regex over `{{>ref}}` tags and calls `SourceStack.resolve_partial()` recursively. This is the only mechanism that can resolve partials across sources. For a data-active key (one carrying `data.toml`), chevron then renders variables and sections over the resolved text; partials are never handed to chevron.
 
-**Drift detection** — compares sha256 of the *live file* against sha256 of the *prior render* (at `_rendered/`). If they differ, the agent edited the live file since the last render → diverged. The new render goes to `<live>.proposed`; the `.divergent` marker holds the live file's hash. `repo-overlay promote` clears both.
+**Drift detection** — compares sha256 of the *live file* against sha256 of the *prior render* (at `_rendered/`). If they differ, the agent edited the live file since the last render → diverged. The new render goes to `<live>.proposed`; the `.divergent` marker holds the live file's hash. `repo-overlay promote` clears both. A copy is judged differently (see *Copy mode*), and `mark_diverged()` (render.py) is the one place both write the proposal, the marker, and the notification.
 
 **Privacy** — `_check_privacy()` (sources.py): a non-private source requesting a partial from a private source raises `PermissionError` at apply time. Private requesting public is always allowed.
 
-**Manifest pruning** — on every apply, `prune()` reads the old manifest, removes symlinks whose rel-paths are absent from the current run, then `write()` saves the new set. This handles source file deletions and source removal from config without leaving dangling links.
+**Manifest pruning** — on every apply, `prune()` reads the old manifest, removes symlinks whose rel-paths are absent from the current run, then `write()` saves the new set. This handles source file deletions and source removal from config without leaving dangling links. A copy is removed only while it still matches its `copy_hash`; an edited one stays, with a `kept:` warning, because it is somebody's work.
 
 **Dot-rewrite** — `_dot_rewrite()` (apply.py) replaces `dot_` prefix on each path component with `.`. Applied only for project overlays (`is_fixed=False`). Fixed targets keep paths verbatim.
 
@@ -75,13 +76,15 @@ for each (key, dest_root, is_fixed):
 
 **Failure containment** — `_apply_key()` reports and skips per-file `OSError` (source → destination, error type); `_apply_and_record()` wraps the whole per-destination apply in the same net. One unwritable or malformed destination never aborts a sweep over the others.
 
-**Skip when current** — `_already_applied()` (apply.py) checks the manifest before printing. If the destination already has a valid manifest with all symlinks in place, both `apply_one` and `apply_all` return silently. For `apply_one` this prevents noisy output on every `cd`; for `apply_all` it is load-bearing, because `_apply_and_record` rewrites a manifest and an `info/exclude` block per destination, and a watched destination turns that write into the next sweep's trigger. A planned path the destination holds as a *regular file* counts as accounted for (`_blocks_a_link()`): `_apply_key` refuses to overwrite one, so a fresh apply is genuinely a no-op there, and treating it as a missing link left every repo with its own bundled `AGENTS.md` permanently "not applied".
+**Skip when current** — `_already_applied()` (apply.py) checks the manifest before printing. If the destination already has a valid manifest with all symlinks in place, both `apply_one` and `apply_all` return silently. For `apply_one` this prevents noisy output on every `cd`; for `apply_all` it is load-bearing, because `_apply_and_record` rewrites a manifest and an `info/exclude` block per destination, and a watched destination turns that write into the next sweep's trigger. A planned path the destination holds as a *regular file* counts as accounted for (`_blocks_placement()`): `_apply_key` refuses to overwrite one, so a fresh apply is genuinely a no-op there, and treating it as a missing link left every repo with its own bundled `AGENTS.md` permanently "not applied". The exception is a copy-mode path holding a file identical to its content, which apply would adopt. A copy counts as current when it still hashes to its `copy_hash` and its source (or render) hash is unchanged; a diverged copy counts as placed while it still differs from its source, so standing drift does not re-apply on every `cd`.
 
 **Watch scope is per tree, not per depth** — every watch carries the descent budget of the tree it belongs to (`_collect_watch_paths`): `_UNBOUNDED` for a source and its subdirectories, `_TOP_LEVEL_ONLY` for `watched_roots` and source parents. `_watch_created_dir()` spends that budget when a directory appears later. The asymmetry is the entire bound on the set. Sources are small and hand-authored, and a cap there is a silent hole (working notes live at `<key>/wip.local/done/<yyyy-mm>-<set>/demo/`, depth 4: the edit fires no event and never materialises). `watched_roots` hold the *destinations*, and a watched destination closes a feedback loop with the manifest write above; before this split, one clone under a watched root pulled a whole checkout in and the set went 166 → 1141, most of it `node_modules`. Neither walk follows a symlinked directory, since an unbounded walk would recurse through a link to an ancestor. `_should_ignore()` filters this tool's own artifacts (manifest, `.proposed`, `.divergent`) as a second line of defence; `.repo-overlays-skip` is deliberately *not* filtered, since creating one must trigger the withdrawal.
 
 **Catch-up on a new tree** — `_watch_tree()` (watch.py) watches a newly created directory *and every subdirectory already on disk under it*, and reports back whether it added any, which `watch()` treats as an event so the apply is scheduled. `mkdir -p a/b/c`, `git clone` and `cp -r` all win a race against inotify: the `CREATE` of `a` arrives after `b` and `c` exist, so their events went to watches that did not exist yet. Watching only `a` left the tree half-seen, which is how a note written into a fresh `wip.local/<branch>/` failed to materialise even with the depth cap lifted.
 
-**Regular-file guard** — `_apply_key()` skips any destination path that is a regular (non-symlink) file with a warning. It will never silently overwrite a committed project file.
+**Regular-file guard** — `_apply_key()` skips any destination path that is a regular (non-symlink) file with a warning. It will never silently overwrite a committed project file. Copy mode keeps the guard: the only regular files it replaces are its own unedited copies, and the only foreign ones it takes over are byte-identical to what it would write.
+
+**Copy mode** — a source directory carrying `.overlay-copy` (`COPY_MARKER`, sources.py) makes every file at or under it a regular-file copy; `copy_dirs_for_key()` collects the markers across sources like `owned_dirs_for_key()`. `_place_copy()` (apply.py) writes through a temporary file and `os.replace`, so a symlink from link mode is replaced rather than written through and no reader sees half a file. The manifest's `copy_hash` (SHA-256 of the bytes written) is the ownership test: a regular file still hashing to it may be refreshed or pruned, other content in a file the tool wrote is an edit (diverged, `.proposed` beside it, the old record kept so the next apply still knows it for an edit), and other content in a file it never wrote is left alone. A foreign file byte-identical to the content is adopted, which is what makes a deleted manifest or a hand-made copy converge. Template copies still write `_rendered/`, but `render_template()` gets no `live_dest` for them: `_rendered/` is shared by every destination of a key, so its render-based drift check would read one worktree's re-render as an edit to every other worktree's copy (`test_template_copies_in_two_destinations_do_not_diverge`). `_place_link()` replaces an unedited copy when the marker goes away.
 
 **Missing partials** — `_apply_key()` catches `FileNotFoundError` from unresolved `{{>…}}` refs. The error is reported but the program continues to the next overlay key rather than aborting entirely.
 

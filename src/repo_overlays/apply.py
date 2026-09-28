@@ -2,23 +2,28 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Literal
 
 from .config import AppConfig, SourceConfig
 from .manifest import (
+    COPY_TMP_SUFFIX,
     MANIFEST_FILENAME,
     SKIP_FILENAME,
     LinkRecord,
+    copy_intact,
+    file_sha256,
     prune,
     read,
     write,
 )
-from .render import render_hash, render_template
+from .render import mark_diverged, render_hash, render_template
 from .resolve import iter_all_destinations, resolve_key_dest
 from .sources import SourceStack, is_tool_junk
 
@@ -351,6 +356,94 @@ def unmanaged_owned_paths(
     return sorted(out)
 
 
+def _is_copy_path(rel: Path, copy_dirs: set[Path]) -> bool:
+    """True if source-relative *rel* sits at or under an `.overlay-copy` directory."""
+    return any(d in rel.parents for d in copy_dirs)
+
+
+def _write_copy(dest: Path, content: bytes, mode: int) -> None:
+    """Replace *dest* with a regular file holding *content*, atomically.
+
+    Written beside the destination and renamed over it, so a reader never sees
+    a half-written file and a symlink at *dest* is replaced, never written
+    through. A reader that binds the *directory* (a container mount) sees the
+    new file; one that binds the file itself keeps the old inode.
+    """
+    tmp = dest.with_name(f".{dest.name}{COPY_TMP_SUFFIX}")
+    try:
+        tmp.write_bytes(content)
+        os.chmod(tmp, mode)
+        os.replace(tmp, dest)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+Placement = Literal["written", "current", "adopted", "diverged", "blocked"]
+
+
+def _place_copy(
+    dest: Path, content: bytes, content_hash: str, mode: int, prior: LinkRecord | None
+) -> Placement:
+    """Make *dest* a regular file holding *content*, never clobbering an edit.
+
+    *prior* is the record from the last apply, and its `copy_hash` is the
+    ownership test. A regular file still hashing to it is the copy this tool
+    wrote, so refreshing it loses nothing. Other content in a file this tool
+    wrote is an edit (`diverged`: kept, the fresh content beside it as
+    `.proposed`), and in a file it never wrote is somebody else's
+    (`blocked`: left alone, as the link path leaves one). A file this tool
+    never wrote that is already byte-identical to *content* is taken over
+    (`adopted`): that is how a hand-made copy, or an apply after a deleted
+    manifest, converges without losing anything.
+    """
+    if dest.is_symlink() or not dest.exists():
+        _write_copy(dest, content, mode)
+        return "written"
+    if not dest.is_file():
+        print(f"  skip: {dest} is not a regular file; not overwriting", file=sys.stderr)
+        return "blocked"
+    live_hash = file_sha256(dest)
+    if live_hash == content_hash:
+        if dest.stat().st_mode & 0o7777 != mode:
+            os.chmod(dest, mode)
+        return "current" if prior is not None and prior.is_copy else "adopted"
+    if prior is not None and prior.copy_hash == live_hash:
+        _write_copy(dest, content, mode)
+        return "written"
+    if prior is not None and prior.is_copy:
+        mark_diverged(dest, content, live_hash)
+        return "diverged"
+    print(
+        f"  skip: {dest} is a regular file this tool did not write; not overwriting",
+        file=sys.stderr,
+    )
+    return "blocked"
+
+
+def _place_link(dest: Path, target: Path, prior: LinkRecord | None) -> Placement:
+    """Point *dest* at *target*, replacing a symlink or an unedited copy of ours."""
+    # Test is_symlink() first: a *dangling* symlink (its source moved) is not
+    # exists(), so an exists()-driven branch would try to create a link over
+    # it and raise FileExistsError. Repointing it is exactly what an apply
+    # after a source move must do.
+    if dest.is_symlink():
+        dest.unlink()
+    elif prior is not None and copy_intact(dest, prior):
+        # The marker is gone, so the key is back to links, and this copy is
+        # one apply wrote and nobody edited.
+        dest.unlink()
+    elif dest.exists():
+        what = (
+            "an edited copy"
+            if prior is not None and prior.is_copy
+            else "a regular file (not a symlink)"
+        )
+        print(f"  skip: {dest} is {what}; not overwriting", file=sys.stderr)
+        return "blocked"
+    dest.symlink_to(target)
+    return "written"
+
+
 def _apply_key(
     key: str,
     dest_root: Path,
@@ -360,17 +453,23 @@ def _apply_key(
 ) -> tuple[list[LinkRecord], list[str]]:
     """Materialise one overlay key into dest_root.
 
-    Returns the link records installed and the destination-relative paths of
-    live files found diverged (kept as-is, with a ``.proposed`` render beside
-    them).
+    Returns the records of the live files placed (symlinks, and regular-file
+    copies under an `.overlay-copy` marker) and the destination-relative
+    paths of live files found diverged (kept as-is, with a `.proposed`
+    render beside them).
     """
     links: list[LinkRecord] = []
     drift: list[str] = []
+    copy_dirs = stack.copy_dirs_for_key(key)
+    # The last apply's records: a copy's ownership test, and how a key that
+    # went back to links recognises the copy it may replace.
+    previous = read(dest_root).by_path()
 
     for abs_src, src in stack.iter_files_for_key(key):
         key_dir = src.path / key
         rel = abs_src.relative_to(key_dir)
         dest_rel = _dest_rel_for(rel, is_fixed)
+        as_copy = _is_copy_path(rel, copy_dirs)
 
         final_dest = _resolve_dest(dest_root, dest_rel)
         if final_dest is None:
@@ -380,17 +479,28 @@ def _apply_key(
                 file=sys.stderr,
             )
             continue
+        record_path = _record_path(dest_root, final_dest)
+        prior = previous.get(record_path)
 
+        rhash: str | None = None
         if rel.suffix == ".mo":
             rendered_dest = _rendered_dir(src, key) / rel.with_suffix("")
+            # A copy's drift is judged against its own record (_place_copy).
+            # The render-based check compares the live file with _rendered/,
+            # which every destination of the key shares: a re-render for one
+            # worktree would make every other worktree's copy look edited.
+            live_dest = None
+            if not as_copy and final_dest.exists() and not final_dest.is_symlink():
+                live_dest = final_dest
             status = render_template(
                 src=abs_src,
                 rendered_dest=rendered_dest,
                 stack=stack,
                 requesting=src,
-                live_dest=final_dest if final_dest.exists() and not final_dest.is_symlink() else None,
+                live_dest=live_dest,
                 key=key,
             )
+            rhash = render_hash(abs_src, stack, src, key)
             if status == "diverged":
                 print(
                     f"  drift: {dest_rel} (kept live; .proposed written)",
@@ -400,42 +510,37 @@ def _apply_key(
                 continue
             if status == "invalid":
                 # The render is garbage; nothing was written, so the previous
-                # (valid) render and its live symlink stay in service. Re-record
-                # the existing link with the fresh hash, or the next apply
-                # would prune it and the harness would silently lose the
+                # (valid) render and its live file stay in service. Re-record
+                # the existing link or copy with the fresh hash, or the next
+                # apply would prune it and the harness would silently lose the
                 # server/config it was using.
                 if final_dest.is_symlink():
                     links.append(
                         LinkRecord(
-                            path=_record_path(dest_root, final_dest),
+                            path=record_path,
                             source=src.name,
                             key=key,
                             target=os.readlink(final_dest),
-                            render_hash=render_hash(abs_src, stack, src, key),
+                            render_hash=rhash,
                         )
                     )
+                elif prior is not None and prior.is_copy:
+                    links.append(replace(prior, render_hash=rhash))
                 continue
-            link_target = rendered_dest
+            content_origin = rendered_dest
         else:
-            link_target = abs_src
+            content_origin = abs_src
 
+        copy_hash: str | None = None
         try:
             final_dest.parent.mkdir(parents=True, exist_ok=True)
-
-            # Test is_symlink() first: a *dangling* symlink (its source moved)
-            # is not exists(), so an exists()-driven branch would try to create
-            # a link over it and raise FileExistsError.  Repointing it is
-            # exactly what an apply after a source move must do.
-            if final_dest.is_symlink():
-                final_dest.unlink()
-            elif final_dest.exists():
-                print(
-                    f"  skip: {final_dest} is a regular file (not a symlink); not overwriting",
-                    file=sys.stderr,
-                )
-                continue
-
-            final_dest.symlink_to(link_target)
+            if as_copy:
+                content = content_origin.read_bytes()
+                copy_hash = hashlib.sha256(content).hexdigest()
+                mode = abs_src.stat().st_mode & 0o7777
+                placed = _place_copy(final_dest, content, copy_hash, mode, prior)
+            else:
+                placed = _place_link(final_dest, content_origin, prior)
         except OSError as e:
             # One unwritable destination must not abort the whole key.
             print(
@@ -445,13 +550,29 @@ def _apply_key(
             )
             continue
 
+        if placed == "blocked":
+            continue
+        if placed == "diverged" and prior is not None:
+            print(
+                f"  drift: {dest_rel} (edited copy kept; .proposed written)",
+                file=sys.stderr,
+            )
+            drift.append(str(dest_rel))
+            # Still ours: keeping the old record is what recognises the edit
+            # as an edit, rather than a stranger's file, on the next apply.
+            links.append(prior)
+            continue
+        if placed == "adopted":
+            print(f"  adopted: {_fmt_path(final_dest)} (identical to the source; now a managed copy)")
+
         links.append(
             LinkRecord(
-                path=_record_path(dest_root, final_dest),
+                path=record_path,
                 source=src.name,
                 key=key,
-                target=str(link_target),
-                render_hash=render_hash(abs_src, stack, src, key) if rel.suffix == ".mo" else None,
+                target=str(content_origin),
+                render_hash=rhash,
+                copy_hash=copy_hash,
             )
         )
 
@@ -499,6 +620,9 @@ def _already_applied(dest_root: Path, key: str, is_fixed: bool, stack: SourceSta
     # this runs on every cd, and the override warnings are the real apply's job.
     planned: set[str] = set()
     planned_hashes: dict[str, str] = {}
+    # Copy-mode paths, with the hash of the content each copy should hold.
+    planned_copies: dict[str, str] = {}
+    copy_dirs = stack.copy_dirs_for_key(key)
     for abs_src, src in stack.iter_files_for_key(key, report_overrides=False):
         rel = abs_src.relative_to(src.path / key)
         final_dest = _planned_dest(rel, dest_root, is_fixed)
@@ -511,6 +635,8 @@ def _already_applied(dest_root: Path, key: str, is_fixed: bool, stack: SourceSta
         # file would go stale until something forced a full apply.
         if rel.suffix == ".mo":
             planned_hashes[record_path] = render_hash(abs_src, stack, src, key)
+        if _is_copy_path(rel, copy_dirs):
+            planned_copies[record_path] = planned_hashes.get(record_path) or file_sha256(abs_src)
 
     recorded = [lr for lr in manifest.links if lr.key == key]
     # A diverged template produces no link but is accounted for: its path sits
@@ -523,12 +649,36 @@ def _already_applied(dest_root: Path, key: str, is_fixed: bool, stack: SourceSta
     # would be a no-op there. Counting it as missing instead leaves such a
     # destination permanently "not applied", and every sweep then rewrites a
     # manifest nothing asked it to change.
-    blocked = {p for p in planned - accounted if _blocks_a_link(dest_root / p)}
+    blocked = {
+        p for p in planned - accounted if _blocks_placement(dest_root / p, planned_copies.get(p))
+    }
     if planned != accounted | blocked:
         return False  # a source file was added or removed since the last apply
 
     for lr in recorded:
         link = dest_root / lr.path
+        want = planned_copies.get(lr.path)
+        if lr.is_copy != (want is not None):
+            return False  # an .overlay-copy marker was added or removed
+        if want is not None:
+            if lr.path in manifest.drift:
+                # A diverged copy counts as placed while it still differs from
+                # the source, as a diverged template does; once it matches
+                # (promote accepted the proposal, or the source took the edit)
+                # one apply clears the drift record.
+                if link.is_file() and not link.is_symlink() and file_sha256(link) != want:
+                    continue
+                return False
+            # Missing, replaced, or edited since the last apply: the apply
+            # has to see it, to rewrite the copy or to keep the edit.
+            if not copy_intact(link, lr):
+                return False
+            if lr.path in planned_hashes:
+                if lr.render_hash != planned_hashes[lr.path]:
+                    return False
+            elif lr.copy_hash != want:
+                return False
+            continue
         if not link.is_symlink() or not link.exists():
             return False
         # Resolve both target and recorded target so we compare real paths.
@@ -544,13 +694,17 @@ def _already_applied(dest_root: Path, key: str, is_fixed: bool, stack: SourceSta
     )
 
 
-def _blocks_a_link(path: Path) -> bool:
+def _blocks_placement(path: Path, copy_hash: str | None) -> bool:
     """Return True if *path* is real content that apply will not replace.
 
-    Mirrors the guard in `_apply_key`: anything present that is not a symlink
-    stays, so upstream's own ``AGENTS.md`` is never overwritten.
+    Mirrors the guards in `_apply_key`: anything present that is not a
+    symlink stays, so upstream's own `AGENTS.md` is never overwritten. The
+    one exception is a copy-mode path (*copy_hash* given) holding a file
+    already identical to what it should hold, which apply adopts.
     """
-    return path.exists() and not path.is_symlink()
+    if not path.exists() or path.is_symlink():
+        return False
+    return copy_hash is None or not path.is_file() or file_sha256(path) != copy_hash
 
 
 def _exclude_up_to_date(dest_root: Path, link_paths: list[str], owned_dirs: list[str]) -> bool:
