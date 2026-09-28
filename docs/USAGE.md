@@ -15,6 +15,12 @@ same files) into project worktrees, without committing it upstream.
 - **Drift detection**: when an agent edits a live file, the next apply refuses to
   overwrite, saves a `.proposed` render, and notifies you. Edits are reconciled with an
   interactive promote step.
+- **Copy mode**: a source directory carrying an empty `.overlay-copy` marker
+  materialises its files as regular-file copies instead of symlinks, for a
+  reader that cannot follow a link: a container that mounts the checkout but
+  not the overlay source, or a program that refuses symlinks. A copy is
+  refreshed while nobody edits it, and an edited copy is kept and treated as
+  drift (§3).
 - **Content-change detection**: a `*.json.mo` render is validated before it is
   written — unparseable JSON is refused, the last good render stays live, and
   `status` reports it as `invalid-json`. A per-link render hash makes
@@ -42,10 +48,11 @@ same files) into project worktrees, without committing it upstream.
     - *Project overlay*: Key does not start with `_`. Bound to a worktree by testing three candidates for membership in the set of key directories that exist across the sources, in order: git remote slug (`owner_repo`), the destination directory basename, then the bare remote repo name (`repo`). First match wins; the third is what makes a linked worktree resolve to its repo's key whatever its own directory is called. When none match, the key falls back to the slug (else the basename) and nothing materialises, since no source provides that key. Uses `dot_X` → `.X` rewrite at materialisation.
 - **Ignored key**: A top-level directory declared as NOT an overlay key for its source — via `ignore_keys = ["dir", …]` in the source's `config.toml` or an `.overlay-ignore` file at the source root (one name per line, `#` comments, trailing `/` allowed). Lets a source repo carry non-overlay content (docs, staging dirs) without the name accidentally matching a repo under a watched root. Per-source: another source may still provide the same key.
 - **Partial**: `_shared/<name>.md` in any source. Referenced from templates as `{{>_shared/<name>.md}}`.
-- **Template**: Any file in a source ending in `.mo`. Rendered to `_rendered/<key>/<path>` (extension stripped). Non-`.mo` files are symlinked verbatim. A template whose destination ends in `.json` must render to parseable JSON; an unparseable render is refused (status: `invalid-json`).
+- **Template**: Any file in a source ending in `.mo`. Rendered to `_rendered/<key>/<path>` (extension stripped). Non-`.mo` files are symlinked verbatim (or copied, under a copy marker). A template whose destination ends in `.json` must render to parseable JSON; an unparseable render is refused (status: `invalid-json`).
 - **Data**: `<key>/data.toml` in any source. A key carrying one is *data-active*: its `.mo` templates render with full Mustache (variables `{{name}}`, sections `{{#list}}…{{/list}}`, inverted `{{^x}}`, raw `{{{x}}}`) against the parsed TOML. A key without one keeps the legacy contract: only `{{>partial}}` resolves and every other `{{…}}` passes through verbatim. The file resolves like a partial — first source in stack order wins, whole file, never merged, privacy-checked — and is never materialised. List-of-table values get `first`/`last` booleans injected (reserved keys) so templates can join items with commas. 
 - **Skeleton**: `_template/` in any source. A key skeleton rather than an overlay key: `repo-overlay init` instantiates it into `<source>/<key>/` for a destination, substituting `{{key}}`, `{{slug}}`, `{{dest}}` and `{{remote}}` in paths and bodies and leaving every other tag for `apply`. Per source, and instantiated for *every* key `init` touches, so it holds only what that source would own for any repo (§5).
-- **Live file**: The symlink at the destination that the agent reads/writes.
+- **Copy marker**: An empty `.overlay-copy` file in a source directory. Every file at or under that directory materialises as a regular-file copy instead of a symlink (§3). A declaration, never materialised.
+- **Live file**: The file at the destination that the agent reads/writes: a symlink, or a regular-file copy under a copy marker.
 - **Drifted file**: A live file no longer matches a fresh render of its source. 
 
 ## 3. Overlay source layout
@@ -95,11 +102,60 @@ _home   = "~"
 _claude = "~/.config/claude"
 ```
 
+### Copies instead of symlinks: `.overlay-copy`
+
+Every live file is a symlink unless its source directory, or a directory above it in the key, carries an empty `.overlay-copy` file. Every file at or under that directory then materialises as a regular file holding the source's content (for a template, the render). The marker is a declaration and never materialises. It applies whichever source provides the file, as `.overlay-own` does, because whether a reader can follow a link depends on where the file lands, not on where it came from.
+
+```
+~/Overlays/penpot-docs/penpot/frontend/resources/public/js/.overlay-copy
+~/Overlays/penpot-docs/penpot/frontend/resources/public/js/config.js
+```
+
+Copies are excluded from git exactly like symlinks (§9.2).
+
+#### When a copy is the right choice
+
+Use copy mode only where a symlink fails for its reader. Two such readers have been met on this setup:
+
+- **A reader that sees the destination but not the source.** A container bind-mounts the checkout, and a symlink into `~/Overlays` dangles inside it. Penpot's devenv answered 404 for `/js/config.js` for that reason, so the frontend never loaded the flags the file sets. The marker above is the fix.
+- **A reader that refuses symlinks by design.** dirge skips any skill whose directory or `SKILL.md` is a symlink. Copy mode would make the overlay's skills visible to it, but a launch-time mirror (`rsync --copy-links`) is fresher for a program that reads its files once at startup: see the last point of the next list.
+
+The same failure is general to anything that carries a tree elsewhere without following links: `rsync` without `-L`, `tar` without `-h`, a `docker build` context, or a sync client that refuses links pointing outside its folder. Copy mode fits those readers too.
+
+#### When a copy is the wrong choice
+
+- **Files anyone edits at the destination.** An edit through a symlink lands in the source at once and reaches every destination. An edit to a copy stays local: `status` reports it as `edited-copy:`, the next apply keeps it and proposes the source's version beside it, and the edit survives only once someone moves it into the source. Guidance files, skills under development, and working notes in `docs.local/` or `wip.local/` stay symlinks.
+- **Searching a linked tree.** `grep -r` and `fd` skip symlinked files, so a linked tree looks empty to them. The fix is the search flag (`grep -R`, `fd --follow`, `rg -L`), not copies.
+- **Files a program rewrites.** A settings or state file that a program saves turns every save into an `edited-copy:`. Leave such files unmanaged, as juggler's `credentials.json` is.
+- **Freshness without the watcher.** A symlink to a verbatim source is current the moment the source changes. A copy is current only after an apply, which the watcher, a `cd` hook, or a manual `repo-overlay apply` runs. For a reader that starts often and reads its files once, a mirror run at that reader's launch is fresher than either.
+- **Replacing a repository's own file.** Copy mode never overwrites a regular file it did not write, tracked or not (§8.1).
+
+#### What apply does with a copy
+
+- It writes the content to a temporary file beside the destination and renames it over the destination. A reader never sees half a file, and a symlink left from link mode is replaced, never written through. The copy takes the source file's permission bits. A reader that bind-mounts the *directory* sees each new copy; one that bind-mounts the file itself keeps the old inode.
+- It records a `copy_hash`, the SHA-256 of what it wrote, in the manifest (§9.1). That hash is the ownership test behind every decision below.
+- It refreshes a copy that still matches its `copy_hash` whenever the source, or the render, changes.
+- It keeps a copy that no longer matches, because somebody edited it. It writes the source's version beside it as `<file>.proposed`, drops a `.divergent` marker, notifies, and records the path as drift, as it does for an edited template, and `repo-overlay promote` resolves it. While the copy still differs from the source, entering the directory does not re-apply. Once the copy matches again (promote accepted the proposal, or the edit moved into the source), one apply clears the drift.
+- It adopts a regular file it did not write when that file is already byte-identical to the content. A hand-made copy, or an apply after the manifest was deleted, therefore converges without a prompt. A file with other content is left alone with the usual `skip:` warning.
+- It prunes a copy that no source provides any more only while the copy matches its `copy_hash`. An edited copy stays in place, unmanaged from then on, with a `kept:` warning.
+- It converts in both directions when the marker appears or disappears: a symlink becomes a copy, and an unedited copy becomes a symlink.
+- For a template, it still writes `_rendered/`, but it judges the copy's drift against the copy's own record. The render-based check compares the live file with `_rendered/`, which every destination of a key shares, so one worktree's re-render would make every other worktree's copy look edited.
+
+#### Recognising and editing a copy
+
+A copy is a regular file, so `readlink` shows nothing and an editor's symlink guard does not fire. `repo-overlay list` names it with every other live file, and its manifest entry carries `copy_hash`. Edit the source, never the copy: the watcher rewrites every copy of it. `status` reports three conditions for copies:
+
+```
+missing: <path>        the copy is gone, or something replaced it
+edited-copy: <path>    edited since the last apply, which has not run since
+stale: <path>          the source changed and nothing re-applied
+```
+
 ## 4. Day-to-day workflow
 
 The files in an overlay repo `<source>/<key>` are the authoritative sources for human
 reading and editing. Live destinations are symlinks pointing to
-`<overlay>/_rendered/<key>`. Agents read and edit the overlay via these symlinks, unaware of their origin. To facilitate inspection, the structure within mirrors the
+`<overlay>/_rendered/<key>` (or, under a copy marker, copies of those files, §3). Agents read and edit the overlay via these symlinks, unaware of their origin. To facilitate inspection, the structure within mirrors the
 source structure one level lower at `<source>/<key>`, but is machine-generated.
 
 ### 4.1 Human authoring guidance
@@ -231,9 +287,9 @@ repo-overlay apply [<path>]      # materialise; default = apply everything
 repo-overlay promote <key>       # reconcile drift interactively
 repo-overlay render <src> <dst>  # (internal) render one template
 repo-overlay watch [--once]      # inotify daemon; --once runs apply_all and exits
-repo-overlay list                # list every live symlink ($HOME-relative), one per line
+repo-overlay list                # list every live file, symlink or copy ($HOME-relative), one per line
 repo-overlay config              # print effective sources, targets, watched_roots
-repo-overlay status [<path>]     # reports drifts / broken links / missing partials / stale renders / invalid JSON
+repo-overlay status [<path>]     # reports drifts / broken links / edited or missing copies / missing partials / stale renders / invalid JSON
 repo-overlay status --unmanaged  # ...and git repos under the watched roots that no key covers
 ```
 
@@ -450,7 +506,7 @@ Overlay _claude (defaults) → ~/.config/claude
 repo-overlay list
 ```
 
-Outputs one `$HOME`-relative path per line for every symlink that an overlay has
+Outputs one `$HOME`-relative path per line for every live file (symlink or copy) that an overlay has
 placed.  Useful for feeding into `.chezmoiignore` so that dotfile management does
 not collide with overlay-managed files:
 
@@ -471,7 +527,9 @@ cd ~/Code/beadpot
 ```
 
 The next `cd` triggers the mise hook, which re-materialises the overlay
-and prints the status line.
+and prints the status line. Copies survive this: a copy still identical to its
+source is adopted back, and an edited copy is left alone with a `skip:`
+warning, unmanaged until its edit moves into the source (§3).
 
 ### Missing partials
 
@@ -712,7 +770,8 @@ AGENTS.md
 ```
 
 This approach is invasive and breaks if someone git-resets or checks out a new branch
-that restores the original file.
+that restores the original file. Copy mode (§3) is no way around it: apply
+never overwrites a regular file it did not write.
 
 ### 8.2 Recommended approach: supplement via a second file
 
@@ -761,9 +820,11 @@ For every materialised destination, repo-overlays writes a manifest:
 <dest_root>/.repo-overlays.toml
 ```
 
-It records which links were installed and which source owns them, so
-`apply` can prune stale links cleanly and `status` can detect external
-tampering. A `[source_paths]` table names the directory each of those
+It records which links and copies were installed and which source owns them,
+so `apply` can prune stale ones cleanly and `status` can detect external
+tampering. A copy's entry also carries its `copy_hash`, the SHA-256 of what
+apply wrote, which is how apply tells its own unedited copy from an edit
+(§3). A `[source_paths]` table names the directory each of those
 sources was read from, because a source applied from one of its worktrees
 has the same name as the registered one and a different tree behind it.
 
@@ -778,7 +839,7 @@ exclude** so every repo is covered:
 
 ### 9.2 Live overlay paths
 
-`apply` automatically writes every overlay symlink it installs into the
+`apply` automatically writes every live file it installs, symlink or copy, into the
 target repo's ``.git/info/exclude``, inside a marked section:
 
 ```
@@ -838,6 +899,8 @@ which gets a single `/dir/` entry instead of one entry per file.
   warning: blanket-excluding it would hide the tracked file's untracked
   neighbours while the tracked file stays tracked regardless.
 - A marker at the key root is refused — it would exclude the whole project.
+- `.overlay-own` and `.overlay-copy` (§3) are independent: one decides how a
+  tree is excluded, the other how its files materialise.
 
 `repo-overlay status` reports the trap directly, per destination:
 

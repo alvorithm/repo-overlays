@@ -14,7 +14,12 @@ worktrees, without committing it upstream.
 You maintain one or more **overlay source repos** containing Markdown files
 (style guides, agent instructions, skills, slash commands). repo-overlays
 **materialises** these into your project directories as symlinks, so the
-agent finds them without the project repo knowing they exist.
+agent finds them without the project repo knowing they exist. Where a reader
+cannot follow a symlink (a container that mounts the project but not the
+source, a program that refuses links), an `.overlay-copy` marker makes the
+files regular-file copies instead, which the tool refreshes and never
+overwrites once edited. When that is the right trade and when it is not:
+[USAGE.md §3](docs/USAGE.md).
 
 ### Example
 You have a private `defaults` with your coding-style guidance and a
@@ -79,8 +84,9 @@ Project destinations are discovered under each source's `watched_roots`, and eve
 | **template** | A `*.mo` file. Rendered via Mustache (partials resolved across the whole source stack) into `_rendered/<key>/<path>`. |
 | **`_template`** | A source's bootstrap skeleton, instantiated into `<source>/<key>/` by `repo-overlay init`. Reserved like `_shared/` and `_rendered/`: never an overlay key itself. |
 | **`data.toml`** | A `<key>/data.toml` makes the key *data-active*: its `.mo` templates get Mustache variables and sections rendered over the parsed TOML, after partials resolve. A key without one keeps the partial-only contract byte-identical. |
-| **materialise** | The act of writing `_rendered/` output and placing a symlink at the destination. |
-| **live file** | The symlink at the destination that the agent reads or writes. |
+| **materialise** | The act of writing `_rendered/` output and placing a symlink (or, under a copy marker, a copy) at the destination. |
+| **live file** | The file at the destination that the agent reads or writes: a symlink, or a regular-file copy. |
+| **copy marker** | An empty `.overlay-copy` file in a source directory: every file at or under it materialises as a regular-file copy instead of a symlink, for readers that cannot follow a link. An edited copy is kept and treated as drift. See [USAGE.md §3](docs/USAGE.md). |
 | **owned directory** | A source directory carrying an empty `.overlay-own` marker: wholly overlay-owned, so the destination excludes the *directory* (`/docs.local/`) instead of each file under it. Keeps new files in the tree from ever being visible to git — see [USAGE.md §9.2](docs/USAGE.md). |
 | **drift** | A live file whose content no longer matches a fresh render of its template — i.e. an agent has edited it since the last apply. |
 | **reconcile** | The interactive step (`repo-overlay promote`) that resolves drift: diff, accept the new render, keep the agent's edit, or edit the source. |
@@ -120,7 +126,7 @@ which replaces its git logic and returns the directory to use.
 
 ## Keeping overlays out of git
 
-`apply` writes every symlink it installs into the destination's
+`apply` writes every live file it installs, symlink or copy, into the destination's
 `.git/info/exclude`, inside a marked block, and never into the project's own
 `.gitignore`. The block is replaced on each apply, so entries never accumulate.
 Linked worktrees share one `info/exclude`, because git resolves `info/` to the
