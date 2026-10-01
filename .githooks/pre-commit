@@ -1,0 +1,55 @@
+#!/bin/sh
+# Prose here is never hard-wrapped, at the last moment a change is still cheap to fix.
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+# Skip deliberately:      git commit --no-verify
+#
+# A formatter is the only thing that can enforce that rule: no markdown linter owns it,
+# and markdownlint's MD013 enforces its opposite by capping line length. The house style
+# lives once for every tree in `~/.mdformat.toml`, which mdformat finds by walking up from
+# each file, so `--check` asks one question of a file: would the formatter change it?
+# The two flags repeat what that file says, so the gate still holds where it is absent,
+# and neither is optional: the default rewrites every ordered item as `1.`, which is
+# correct HTML and a mangled source file, and it hard-wraps prose that the rule leaves
+# alone.
+#
+# Only staged markdown that this repository owns is asked. `docs.local/`, `wip.local/`,
+# and `work.local/` are materialised from the overlay source as symlinks and excluded
+# from git, so their files are never staged, and the symlink test below covers a markdown
+# path that is itself a link.
+#
+# The sibling hook in the overlay source, `~/Overlays/defaults/.githooks/pre-commit`,
+# carries docket's checks as well as this one. They are not repeated here because no
+# set's work root lies inside this checkout: the `ro` set's root is
+# `~/Overlays/defaults/repo-overlays/work.local`, which is that tree's business.
+#
+# A hook that cannot run its checker must not become a hook that cannot commit, so an
+# absent formatter says so in one line and lets the commit through. A replay is not an
+# authoring moment either: a rebase, merge, or cherry-pick reconstructs intermediate
+# states that were never meant to check out on their own.
+set -e
+
+G=$(git rev-parse --git-dir)
+for m in rebase-merge rebase-apply MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+  [ -e "$G/$m" ] && exit 0
+done
+
+if ! command -v mdformat >/dev/null 2>&1; then
+  echo "pre-commit: mdformat is not on PATH, so no markdown file was checked" >&2
+  exit 0
+fi
+
+UNFORMATTED=""
+for f in $(git diff --cached --name-only --diff-filter=ACM -- '*.md'); do
+  [ -f "$f" ] && [ ! -L "$f" ] || continue
+  mdformat --check --wrap no --number "$f" >/dev/null 2>&1 || UNFORMATTED="$UNFORMATTED $f"
+done
+
+if [ -n "$UNFORMATTED" ]; then
+  echo >&2
+  echo "pre-commit: these staged files are hard-wrapped, or otherwise differ from what" >&2
+  echo "\`mdformat --wrap no --number\` writes:" >&2
+  for f in $UNFORMATTED; do echo "  $f" >&2; done
+  echo "Run \`mdformat --wrap no --number$UNFORMATTED\` and stage the result." >&2
+  exit 1
+fi
